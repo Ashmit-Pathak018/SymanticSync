@@ -22,7 +22,7 @@ import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
 
 export function SyncHub() {
-  const { databases, selectedDbId, setSelectedDbId, syncStatus, refreshState } = useApp();
+  const { databases, selectedDbId, setSelectedDbId, syncStatus, refreshState, refreshCounter } = useApp();
 
   // Sync execution state
   const [selectedDb, setSelectedDb] = useState(selectedDbId || '');
@@ -43,16 +43,32 @@ export function SyncHub() {
   const [genSuccess, setGenSuccess] = useState(null);
   const [genError, setGenError] = useState(null);
 
+  const replicaReqRef = React.useRef(0);
+
+  // When global workspace changes, synchronize selectedDb and clear stale results
   useEffect(() => {
-    if (selectedDbId) setSelectedDb(selectedDbId);
+    if (selectedDbId && selectedDbId !== selectedDb) {
+      setSelectedDb(selectedDbId);
+      setSyncResult(null);
+      setSyncError(null);
+      setGenSuccess(null);
+      setGenError(null);
+    }
   }, [selectedDbId]);
 
-  // Load replicas whenever selectedDb changes
+  // Load replicas whenever selectedDb or refreshCounter changes
   useEffect(() => {
     async function loadReplicas() {
-      if (!selectedDb) return;
+      if (!selectedDb) {
+        setReplicas([]);
+        setReplicaA('');
+        setReplicaB('');
+        return;
+      }
+      const reqId = ++replicaReqRef.current;
       try {
         const reps = await api.getReplicas(selectedDb);
+        if (reqId !== replicaReqRef.current) return;
         const repList = Array.isArray(reps) ? reps : [];
         setReplicas(repList);
         if (repList.length >= 2) {
@@ -66,11 +82,13 @@ export function SyncHub() {
           setReplicaB('');
         }
       } catch (err) {
-        console.error('Failed to load replicas for sync:', err);
+        if (reqId === replicaReqRef.current) {
+          console.error('Failed to load replicas for sync:', err);
+        }
       }
     }
     loadReplicas();
-  }, [selectedDb]);
+  }, [selectedDb, refreshCounter]);
 
   const handleRunSync = async (e) => {
     e.preventDefault();

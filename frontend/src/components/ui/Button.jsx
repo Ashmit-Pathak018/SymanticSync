@@ -12,6 +12,7 @@ export function Button({
   onClick,
   type = 'button',
   title,
+  ...props
 }) {
   const sizeClasses = {
     sm: 'px-2.5 py-1.5 text-xs rounded-md',
@@ -35,6 +36,7 @@ export function Button({
       disabled={disabled || loading}
       title={title}
       className={`inline-flex items-center justify-center gap-2 transition-all select-none disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${sizeClasses} ${variantClasses} ${className}`}
+      {...props}
     >
       {loading ? (
         <Loader2 className="w-4 h-4 animate-spin" />

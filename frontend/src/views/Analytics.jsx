@@ -17,6 +17,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
+import { useApp } from '../context/AppContext';
 
 const WORKLOADS = [
   {
@@ -37,13 +38,14 @@ const WORKLOADS = [
 ];
 
 export function Analytics() {
+  const { refreshCounter } = useApp();
   const [selectedWorkload, setSelectedWorkload] = useState('inventory');
   const [running, setRunning] = useState(false);
   const [metrics, setMetrics] = useState(null);
   const [cachedMetrics, setCachedMetrics] = useState({});
   const [error, setError] = useState(null);
 
-  // Load existing metrics on mount
+  // Load existing metrics on mount or on global refresh
   useEffect(() => {
     async function loadInitial() {
       try {
@@ -59,7 +61,7 @@ export function Analytics() {
       }
     }
     loadInitial();
-  }, []);
+  }, [refreshCounter, selectedWorkload]);
 
   const handleRunBenchmark = async (wl = selectedWorkload) => {
     setRunning(true);

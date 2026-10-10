@@ -22,7 +22,7 @@ import { api } from '../services/api';
 export function ReplicaManager() {
   const { dbId } = useParams();
   const navigate = useNavigate();
-  const { databases, setSelectedDbId, refreshState } = useApp();
+  const { databases, selectedDbId, setSelectedDbId, refreshState, refreshCounter } = useApp();
 
   const [replicas, setReplicas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,26 +31,37 @@ export function ReplicaManager() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (dbId) setSelectedDbId(dbId);
-  }, [dbId, setSelectedDbId]);
+  const requestIdRef = React.useRef(0);
 
-  const loadReplicas = async () => {
+  useEffect(() => {
+    if (dbId && dbId !== selectedDbId) {
+      setSelectedDbId(dbId);
+    }
+  }, [dbId, selectedDbId, setSelectedDbId]);
+
+  const loadReplicas = React.useCallback(async () => {
     if (!dbId) return;
+    const reqId = ++requestIdRef.current;
     setLoading(true);
+    setReplicas([]); // Immediately clear previous replicas to avoid stale data display
     try {
       const reps = await api.getReplicas(dbId);
+      if (reqId !== requestIdRef.current) return;
       setReplicas(Array.isArray(reps) ? reps : []);
     } catch (err) {
-      console.error('Failed to load replicas:', err);
+      if (reqId === requestIdRef.current) {
+        console.error('Failed to load replicas:', err);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [dbId]);
 
   useEffect(() => {
     loadReplicas();
-  }, [dbId]);
+  }, [loadReplicas, refreshCounter]);
 
   const handleCreateReplica = async (e) => {
     e.preventDefault();

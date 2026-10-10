@@ -22,12 +22,12 @@ import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
 
 export function Conflicts() {
-  const { databases, refreshState } = useApp();
+  const { databases, selectedDbId, refreshState, refreshCounter } = useApp();
 
   const [conflicts, setConflicts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dbFilter, setDbFilter] = useState('all');
+  const [dbFilter, setDbFilter] = useState(selectedDbId || 'all');
   const [expandedId, setExpandedId] = useState(null);
 
   // Manual resolution custom value input map
@@ -35,24 +35,39 @@ export function Conflicts() {
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveFeedback, setResolveFeedback] = useState(null);
 
-  const loadConflicts = async () => {
+  const requestIdRef = React.useRef(0);
+
+  // Sync dbFilter when active workspace changes
+  useEffect(() => {
+    if (selectedDbId) {
+      setDbFilter(selectedDbId);
+    }
+  }, [selectedDbId]);
+
+  const loadConflicts = React.useCallback(async () => {
+    const reqId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await api.getConflicts({
         status: statusFilter,
         db_id: dbFilter,
       });
+      if (reqId !== requestIdRef.current) return;
       setConflicts(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load conflicts:', err);
+      if (reqId === requestIdRef.current) {
+        console.error('Failed to load conflicts:', err);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, [statusFilter, dbFilter]);
 
   useEffect(() => {
     loadConflicts();
-  }, [statusFilter, dbFilter]);
+  }, [loadConflicts, refreshCounter]);
 
   const handleResolve = async (conflictId, mode) => {
     setResolvingId(conflictId);

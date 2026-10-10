@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layers,
@@ -13,6 +13,7 @@ import {
   Loader2,
   Database,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
@@ -26,7 +27,14 @@ const POLICIES = ['SUM', 'AVG', 'APPEND', 'LWW', 'REJECT', 'MIN', 'MAX'];
 export function SchemaEditor() {
   const { dbId } = useParams();
   const navigate = useNavigate();
-  const { databases, setSelectedDbId } = useApp();
+  const {
+    databases,
+    selectedDbId,
+    setSelectedDbId,
+    refreshCounter,
+    setUnsavedChanges,
+    setUnsavedMessage,
+  } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [schemaData, setSchemaData] = useState(null);
@@ -37,70 +45,133 @@ export function SchemaEditor() {
   const [saveSuccess, setSaveSuccess] = useState(null);
   const [generalError, setGeneralError] = useState(null);
 
-  // Sync selectedDbId with route param
+  // Request race-condition guard and dirty state tracker
+  const requestIdRef = useRef(0);
+  const initialPoliciesRef = useRef({});
+
+  // Sync selectedDbId with route param if different
   useEffect(() => {
-    if (dbId) setSelectedDbId(dbId);
-  }, [dbId, setSelectedDbId]);
+    if (dbId && dbId !== selectedDbId) {
+      setSelectedDbId(dbId);
+    }
+  }, [dbId, selectedDbId, setSelectedDbId]);
+
+  // Configure unsaved changes message
+  useEffect(() => {
+    setUnsavedMessage(`You have unsaved policy changes for workspace '${dbId}'. Switching workspaces will discard them. Do you want to proceed?`);
+    return () => {
+      setUnsavedChanges(false);
+    };
+  }, [dbId, setUnsavedChanges, setUnsavedMessage]);
 
   // Load schema and active policies
-  useEffect(() => {
-    async function loadSchema() {
-      if (!dbId) return;
-      setLoading(true);
-      setGeneralError(null);
-      try {
-        const schema = await api.getDatabaseSchema(dbId);
-        setSchemaData(schema);
+  const loadSchema = useCallback(async () => {
+    if (!dbId) return;
 
-        if (schema.tables && schema.tables.length > 0) {
-          setActiveTable(schema.tables[0].table_name);
-        }
+    const reqId = ++requestIdRef.current;
+    setLoading(true);
+    setGeneralError(null);
+    setSaveSuccess(null);
+    // Immediately clear previous workspace data to prevent stale display
+    setSchemaData(null);
+    setPolicyAssignments({});
+    setValidationStates({});
 
-        // Initialize policy assignments and run live validations
-        const initialAssignments = {};
-        const initialValidations = {};
+    try {
+      const schema = await api.getDatabaseSchema(dbId);
+      // Discard stale response if a newer request was initiated
+      if (reqId !== requestIdRef.current) return;
 
-        for (const tbl of schema.tables) {
-          for (const col of tbl.columns) {
-            const key = `${tbl.table_name}:${col.name}`;
-            const pol = col.policy || 'LWW';
-            initialAssignments[key] = pol;
+      const initialAssignments = {};
+      const initialValidations = {};
+      const validationTasks = [];
 
-            if (col.is_pk) {
-              initialValidations[key] = { valid: true, error_message: null };
-            } else {
-              // Validate policy
-              try {
-                const res = await api.validatePolicy({
-                  table: tbl.table_name,
-                  column: col.name,
-                  policy: pol,
-                  normalized_type: col.normalized_type,
-                });
-                initialValidations[key] = res;
-              } catch (err) {
-                initialValidations[key] = { valid: false, error_message: err.message };
-              }
-            }
+      for (const tbl of schema.tables || []) {
+        for (const col of tbl.columns || []) {
+          const key = `${tbl.table_name}:${col.name}`;
+          const pol = col.policy || 'LWW';
+          initialAssignments[key] = pol;
+
+          if (col.is_pk) {
+            initialValidations[key] = { valid: true, error_message: null };
+          } else {
+            validationTasks.push({
+              key,
+              table: tbl.table_name,
+              column: col.name,
+              policy: pol,
+              normalized_type: col.normalized_type,
+            });
           }
         }
+      }
 
-        setPolicyAssignments(initialAssignments);
-        setValidationStates(initialValidations);
-      } catch (err) {
+      // Concurrently validate all non-PK column policies
+      const validationResults = await Promise.all(
+        validationTasks.map(async (task) => {
+          try {
+            const res = await api.validatePolicy({
+              table: task.table,
+              column: task.column,
+              policy: task.policy,
+              normalized_type: task.normalized_type,
+            });
+            return [task.key, res];
+          } catch (err) {
+            return [
+              task.key,
+              { valid: false, error_message: err.data?.detail || err.message },
+            ];
+          }
+        })
+      );
+
+      // Discard if superseded during validation calls
+      if (reqId !== requestIdRef.current) return;
+
+      for (const [key, res] of validationResults) {
+        initialValidations[key] = res;
+      }
+
+      initialPoliciesRef.current = { ...initialAssignments };
+      setUnsavedChanges(false);
+      setSchemaData(schema);
+      setPolicyAssignments(initialAssignments);
+      setValidationStates(initialValidations);
+
+      setActiveTable((prevTable) => {
+        if (prevTable && schema.tables?.some((t) => t.table_name === prevTable)) {
+          return prevTable;
+        }
+        return schema.tables?.[0]?.table_name || '';
+      });
+    } catch (err) {
+      if (reqId === requestIdRef.current) {
         console.error('Failed to load schema:', err);
-        setGeneralError(err.message);
-      } finally {
+        setGeneralError(err.data?.detail || err.message);
+      }
+    } finally {
+      if (reqId === requestIdRef.current) {
         setLoading(false);
       }
     }
+  }, [dbId, setUnsavedChanges]);
 
+  // Reload when dbId changes OR when global refreshCounter increments
+  useEffect(() => {
     loadSchema();
-  }, [dbId]);
+  }, [loadSchema, refreshCounter]);
 
   const handlePolicyChange = async (tableName, col, newPolicy) => {
     const key = `${tableName}:${col.name}`;
-    setPolicyAssignments((prev) => ({ ...prev, [key]: newPolicy }));
+    const nextAssignments = { ...policyAssignments, [key]: newPolicy };
+    setPolicyAssignments(nextAssignments);
+
+    // Track whether user has unsaved edits
+    const isDirty = Object.keys(nextAssignments).some(
+      (k) => nextAssignments[k] !== initialPoliciesRef.current[k]
+    );
+    setUnsavedChanges(isDirty);
 
     // Immediate fail-fast Policy Validator call
     try {
@@ -133,53 +204,74 @@ export function SchemaEditor() {
     setGeneralError(null);
 
     try {
-      // Build batch assignments payload
+      // Build batch assignments payload for the active table
       const assignments = [];
-      const currentTableObj = schemaData?.tables?.find((t) => t.table_name === activeTable);
-      if (currentTableObj) {
-        for (const col of currentTableObj.columns) {
+      if (currentTable) {
+        for (const col of currentTable.columns) {
           if (!col.is_pk) {
-            const key = `${activeTable}:${col.name}`;
+            const key = `${effectiveActiveTable}:${col.name}`;
+            const pol = policyAssignments[key] || 'LWW';
             assignments.push({
-              table: activeTable,
+              table: effectiveActiveTable,
               column: col.name,
-              policy: policyAssignments[key] || 'LWW',
+              policy: pol,
             });
           }
         }
       }
 
       await api.setPolicies(dbId, assignments);
-      setSaveSuccess(`Policies for table '${activeTable}' successfully updated!`);
+
+      // Update initial baseline
+      assignments.forEach((a) => {
+        initialPoliciesRef.current[`${a.table}:${a.column}`] = a.policy;
+      });
+
+      const isStillDirty = Object.keys(policyAssignments).some(
+        (k) => policyAssignments[k] !== initialPoliciesRef.current[k]
+      );
+      setUnsavedChanges(isStillDirty);
+
+      setSaveSuccess(`Policies for table '${effectiveActiveTable}' successfully updated!`);
       setTimeout(() => setSaveSuccess(null), 4000);
     } catch (err) {
-      setGeneralError(err.message);
+      setGeneralError(err.data?.detail || err.message);
     } finally {
       setSaving(false);
     }
   };
 
   const currentDb = databases.find((d) => d.id === dbId);
-  const currentTable = schemaData?.tables?.find((t) => t.table_name === activeTable);
+  const currentTable =
+    schemaData?.tables?.find((t) => t.table_name === activeTable) ||
+    schemaData?.tables?.[0] ||
+    null;
+  const effectiveActiveTable = currentTable?.table_name || activeTable;
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-text-secondary">
+      <div className="flex flex-col items-center justify-center py-24 text-text-secondary">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
-        <p className="text-sm">Inspecting SQLite PRAGMA table definitions...</p>
+        <p className="text-sm font-medium">Inspecting SQLite PRAGMA table definitions for '{dbId}'...</p>
+        <span className="text-xs text-text-muted mt-1">Reading column types, constraints, and assigned policies</span>
       </div>
     );
   }
 
   if (generalError && !schemaData) {
     return (
-      <div className="max-w-2xl mx-auto py-10">
+      <div className="max-w-2xl mx-auto py-10 space-y-4">
         <Alert variant="danger" title="Schema Inspection Error">
           {generalError}
         </Alert>
-        <Button variant="secondary" className="mt-4" onClick={() => navigate('/databases')}>
-          Back to Workspaces
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="primary" size="sm" icon={RefreshCw} onClick={loadSchema}>
+            Retry Load
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/databases')}>
+            Back to Workspaces
+          </Button>
+        </div>
       </div>
     );
   }
@@ -190,8 +282,8 @@ export function SchemaEditor() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-primary bg-primary-light px-2 py-0.5 rounded-sm">
-              {dbId}
+            <span className="text-xs font-mono text-primary bg-primary-light px-2 py-0.5 rounded-sm font-semibold">
+              {currentDb?.name || dbId}
             </span>
             <span className="text-xs text-text-muted">/</span>
             <span className="text-xs font-semibold text-text-secondary">Policy Designer</span>
@@ -205,6 +297,15 @@ export function SchemaEditor() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={RotateCcw}
+            onClick={loadSchema}
+            title="Reload schema and active policies from database"
+          >
+            Reload Schema
+          </Button>
           <Button
             variant="primary"
             icon={Save}
@@ -231,6 +332,12 @@ export function SchemaEditor() {
         </Alert>
       )}
 
+      {generalError && (
+        <Alert variant="danger" title="Operation Error">
+          {generalError}
+        </Alert>
+      )}
+
       {/* Table Selector Tabs */}
       <div className="flex items-center gap-2 border-b border-border pb-1 overflow-x-auto">
         <span className="text-xs font-semibold text-text-secondary mr-2 uppercase tracking-wider">
@@ -241,7 +348,7 @@ export function SchemaEditor() {
             key={tbl.table_name}
             onClick={() => setActiveTable(tbl.table_name)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium font-mono transition-all cursor-pointer ${
-              activeTable === tbl.table_name
+              effectiveActiveTable === tbl.table_name
                 ? 'bg-primary text-white shadow-xs'
                 : 'bg-white text-text-secondary hover:text-text-primary hover:bg-gray-50 border border-border'
             }`}
@@ -259,7 +366,7 @@ export function SchemaEditor() {
             <div className="px-5 py-3.5 bg-gray-50/70 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
-                  Table: <span className="font-mono text-primary font-semibold">{activeTable}</span>
+                  Table: <span className="font-mono text-primary font-semibold">{effectiveActiveTable}</span>
                 </span>
                 <span className="text-xs text-text-muted">
                   ({currentTable?.columns?.length || 0} columns detected via SQLite PRAGMA)
@@ -284,7 +391,7 @@ export function SchemaEditor() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {currentTable?.columns?.map((col) => {
-                    const key = `${activeTable}:${col.name}`;
+                    const key = `${effectiveActiveTable}:${col.name}`;
                     const currentPolicy = policyAssignments[key] || 'LWW';
                     const validation = validationStates[key];
                     const isInvalid = validation && validation.valid === false;
@@ -363,7 +470,7 @@ export function SchemaEditor() {
                                 ❌ Incompatible
                               </Badge>
                               <p className="text-[10px] text-danger font-medium leading-tight max-w-xs mt-0.5">
-                                {validation.error_message || `${currentPolicy} cannot merge ${col.normalized_type}`}
+                                {validation?.error_message || `${currentPolicy} cannot merge ${col.normalized_type}`}
                               </p>
                             </div>
                           ) : (

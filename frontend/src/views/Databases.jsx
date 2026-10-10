@@ -21,7 +21,7 @@ import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
 
 export function Databases() {
-  const { databases, refreshState, setSelectedDbId } = useApp();
+  const { databases, refreshState, setSelectedDbId, refreshCounter } = useApp();
   const navigate = useNavigate();
 
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -61,7 +61,7 @@ export function Databases() {
     if (databases.length > 0) {
       fetchAllReplicas();
     }
-  }, [databases]);
+  }, [databases, refreshCounter]);
 
   const handleRegister = async (e) => {
     e.preventDefault();

@@ -22,7 +22,7 @@ import { Badge } from '../components/ui/Badge';
 import { api } from '../services/api';
 
 export function Dashboard() {
-  const { databases, syncStatus, refreshState, setSelectedDbId } = useApp();
+  const { databases, syncStatus, refreshState, setSelectedDbId, refreshCounter } = useApp();
   const navigate = useNavigate();
 
   const [conflicts, setConflicts] = useState([]);
@@ -42,7 +42,7 @@ export function Dashboard() {
       }
     }
     loadRecentConflicts();
-  }, []);
+  }, [refreshCounter]);
 
   const handleSeed = async (workload = 'all') => {
     setSeeding(true);
