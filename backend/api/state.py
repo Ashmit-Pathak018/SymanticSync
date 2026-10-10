@@ -18,11 +18,13 @@ single-process dev server is provided by a threading.Lock.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path("c:/Users/ASMIT/SemanticSync/data")
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+DATA_DIR = Path(os.environ.get("SEMANTICSYNC_DATA_DIR", str(DEFAULT_DATA_DIR)))
 REGISTRY_FILE = DATA_DIR / "registry.json"
 
 # Shape of the serialised registry file:
