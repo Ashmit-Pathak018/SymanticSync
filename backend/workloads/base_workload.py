@@ -17,12 +17,15 @@ divergence injection automatically.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+
+DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
 class BaseWorkload(ABC):
@@ -39,7 +42,9 @@ class BaseWorkload(ABC):
     name: str
     description: str
 
-    def __init__(self, data_dir: str = "c:/Users/ASMIT/SemanticSync/data") -> None:
+    def __init__(self, data_dir: str | Path | None = None) -> None:
+        if data_dir is None:
+            data_dir = os.environ.get("SEMANTICSYNC_DATA_DIR", str(DEFAULT_DATA_DIR))
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 

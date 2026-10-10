@@ -67,29 +67,67 @@ SemanticSync/
 │   │   ├── test_benchmark.py
 │   │   └── test_api.py
 │   └── requirements.txt
-└── data/                         # Local database storage
+│
+├── frontend/                     # SemanticSync Studio (React 19 + Vite + Tailwind CSS)
+│   ├── src/
+│   │   ├── components/           # UI badges, buttons, cards, modals, layout
+│   │   ├── context/              # Global AppContext state management
+│   │   ├── services/api.js       # Centralized REST API service
+│   │   ├── views/                # Studio views (Dashboard, Schema, SQL, Conflicts, Sync, Benchmark)
+│   │   ├── App.jsx               # React Router configuration
+│   │   └── main.jsx              # React app entry point
+│   ├── package.json
+│   ├── tailwind.config.js
+│   └── vite.config.js
+│
+└── data/                         # Local database storage (.db SQLite files)
 ```
 
 ---
 
 ## 🛠️ Getting Started
 
-### 1. Install Dependencies
+### 1. Install Backend Dependencies
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-### 2. Run Test Suite
+### 2. Install Frontend Dependencies
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 3. Run Automated Tests
 ```bash
 pytest backend/tests/ -v
 ```
 
-### 3. Start API Server
+### 4. Start the Application
+
+You can start both the backend API and the frontend Studio simultaneously using the unified runner, or start them in separate terminals:
+
+**Option A — Unified Runner (Starts both Backend & Frontend):**
 ```bash
-python main.py
+python main.py --with-frontend
 ```
-- API Server: `http://127.0.0.1:8000`
-- Interactive Swagger Docs: `http://127.0.0.1:8000/docs`
+
+**Option B — Independent Processes:**
+- **Terminal 1 (Backend API):**
+  ```bash
+  python main.py
+  ```
+  - API Server: `http://127.0.0.1:8000`
+  - Swagger Documentation: `http://127.0.0.1:8000/docs`
+
+- **Terminal 2 (Frontend Studio):**
+  ```bash
+  cd frontend
+  npm run dev
+  ```
+  - Studio UI: `http://localhost:5173`
+  - All API calls (`/api/...`) are automatically proxied to `http://127.0.0.1:8000`.
 
 ---
 
