@@ -7,34 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-10-10
+
+### Added
+- **Frontend Studio Integration (PR #1):**
+  - Full React 18, Vite, and Tailwind CSS web application in `frontend/`.
+  - Seven primary interactive views: Dashboard, Databases, SchemaEditor, Conflicts, SyncHub, SqlConsole, Analytics, and Settings.
+  - Integration with backend REST API under `/api/v1`.
+  - Unified runner in `main.py` supporting concurrent API and UI execution (`--with-frontend`).
+
+### Documentation & Scientific Reconciliation
+- Reconciled complete project documentation across `docs/` and `research/`:
+  - Established formal algebraic classifications for all 7 merge policies (`POLICY_SPECIFICATION.md`).
+  - Added full row-mutation conflict taxonomy covering `INSERT` collisions, `UPDATE vs DELETE` tombstones, and foreign-key orphan quarantine (`CONFLICT_MODEL.md`).
+  - Formalized causal stability log compaction and multi-replica convergence constraints (`SYNC_AND_CRDT.md`).
+  - Documented explicit requirement-to-test traceability matrix (`docs/TRACEABILITY_MATRIX.md`).
+  - Produced empirical audit report distinguishing verified codebase facts from planned extensions (`docs/AUDIT_REPORT.md`).
+
+---
+
 ## [0.2.0] - 2026-10-10
 
 ### Added
-- Comprehensive project documentation suite (`docs/`):
-  - `PRD.md`: Full product requirements, vision, user stories, and target benchmarks.
-  - `ARCHITECTURE.md`: High-level system topology, layer separation, dataflow pipelines.
-  - `CORE_WORKFLOW.md`: Step-by-step developer and runtime workflow documentation.
-  - `DECISIONS.md`: Architecture Decision Records (ADR-001 through ADR-007).
-  - `DATA_MODELS.md`: Dataclass and Pydantic schema specifications for all entities.
-  - `SCHEMA_INSPECTION.md`: Introspection rules, SQLite type affinity mapping matrix.
-  - `POLICY_SPECIFICATION.md`: Detailed semantics, commutativity, and formulas for all 7 policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`, `MIN`, `MAX`).
-  - `CONFLICT_MODEL.md`: Formal three-way diff model, detection rules, and conflict lifecycle.
-  - `SYNC_AND_CRDT.md`: Hybrid Logical Clock (HLC) and change log convergence protocols.
-  - `API_SPECIFICATION.md`: Complete OpenAPI endpoint schemas and payload documentation.
-  - `UX_SPECIFICATION.md`: View layouts and interaction design for SemanticSync Studio.
-  - `DESIGN_SYSTEM.md`: Color tokens, typography, component standards.
-  - `FRONTEND_ARCHITECTURE.md`: React 18, Vite, Tailwind CSS architectural plan.
-  - `SQL_CONSOLE.md`: Interactive SQL console specification and security constraints.
-  - `TESTING_STRATEGY.md`: Test classification, mock-free philosophy, and coverage goals.
-  - `SECURITY.md`: SQL injection mitigation and local security boundaries.
-  - `IMPLEMENTATION_PLAN.md`: Multiphase delivery roadmap.
-  - `ROADMAP.md`: Short-, mid-, and long-term milestones.
-  - `DEVELOPMENT_GUIDE.md`: Local setup, testing instructions, and CLI workflows.
-  - `CODING_STANDARDS.md`: Engineering practices and static typing rules.
-  - `CONTRIBUTING.md`: PR guidelines and collaboration rules.
-  - `KNOWN_LIMITATIONS.md`: Constraints in v1 (single-PK, update divergence focus).
-- Research documentation suite (`research/`):
-  - Formal research problem formulation, literature review, baseline definitions, ground truths, evaluation metrics, results protocols, and publication plan.
+- Initial project documentation suite (`docs/`) and research specifications (`research/`).
 
 ---
 

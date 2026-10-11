@@ -1,123 +1,130 @@
-# SemanticSync — Implementation Plan
+# SemanticSync — Prioritized Phased Implementation Plan
 
-**Version:** 1.0  
-**Last Updated:** October 2026
+**Version:** 2.0 (Reconciled)  
+**Status:** Approved Roadmap & Engineering Contract
 
 ---
 
-## Phase Overview
+## Phased Delivery Overview
 
 ```
-Phase 1: Backend Core + API     ✅  COMPLETE
-Phase 2: Documentation          🔄  IN PROGRESS (this file)
-Phase 3: Frontend (Studio)      📋  PLANNED
-Phase 4: Research Evaluation    📋  PLANNED
-Phase 5: Polish + Paper         📋  PLANNED
+Phase 0: Documentation Reconciliation               ✅ COMPLETE (This Step)
+Phase 1: Core Correctness & Auditing               📋 NEXT UP
+Phase 2: Full Row-Mutation Conflict Model          📋 SPECIFIED
+Phase 3: Bounded Operations & N-Replica Validation  📋 SPECIFIED
+Phase 4: Reproducible Benchmark Stress Harness     📋 SPECIFIED
+Phase 5: Relational Foreign Key Invariant Extension 📋 SPECIFIED
+Phase 6: Operational Log Compaction & Checkpoint   📋 SPECIFIED
+Phase 7: Studio Integration & Research Release     📋 SPECIFIED
 ```
 
 ---
 
-## Phase 1: Backend Core + REST API ✅
+## Detailed Phases, Tasks & Acceptance Criteria
 
-**Status:** Complete. 56 tests passing. Pushed to GitHub.
-
-### Milestones
-
-| # | Milestone | Files | Status |
-|---|---|---|---|
-| 1.1 | Engine: Schema Inspector | `engine/schema_inspector.py` | ✅ |
-| 1.2 | Engine: Policy Registry | `engine/policy_registry.py` | ✅ |
-| 1.3 | Engine: Policy Validator | `engine/policy_validator.py` | ✅ |
-| 1.4 | Engine: Semantic Resolver | `engine/semantic_resolver.py` | ✅ |
-| 1.5 | Engine: Conflict Detector | `engine/conflict_detector.py` | ✅ |
-| 1.6 | Engine: Merge Manager | `engine/merge_manager.py` | ✅ |
-| 1.7 | Engine: CRDT Sync + HLC | `engine/crdt_sync.py` | ✅ |
-| 1.8 | API: All Route Modules | `api/routes_*.py` | ✅ |
-| 1.9 | API: App State | `api/state.py` | ✅ |
-| 1.10 | Workloads: 3 domain datasets | `workloads/` | ✅ |
-| 1.11 | Tests: 56 tests, 0 failures | `tests/` | ✅ |
-| 1.12 | GitHub push | commit `bf1a8e5` | ✅ |
+### Phase 0: Documentation Reconciliation ✅
+- **Objective:** Align all specifications, research documents, and roadmaps with verified reality and approved scope.
+- **Constraints:** Modify Markdown documentation only. Zero changes to application implementation code.
+- **Acceptance Criteria:**
+  - All 31 Markdown files reconciled.
+  - Clear separation between verified facts, working features, and planned extensions.
+  - Requirement-to-test traceability matrix established.
 
 ---
 
-## Phase 2: Documentation 🔄
-
-**Status:** In Progress.
-
-### Files to Create
-
-| File | Status |
-|---|---|
-| `CHANGELOG.md` | 📋 |
-| `docs/PRD.md` | ✅ |
-| `docs/ARCHITECTURE.md` | ✅ |
-| `docs/CORE_WORKFLOW.md` | ✅ |
-| `docs/DECISIONS.md` | ✅ |
-| `docs/DATA_MODELS.md` | ✅ |
-| `docs/SCHEMA_INSPECTION.md` | ✅ |
-| `docs/POLICY_SPECIFICATION.md` | ✅ |
-| `docs/CONFLICT_MODEL.md` | ✅ |
-| `docs/SYNC_AND_CRDT.md` | ✅ |
-| `docs/API_SPECIFICATION.md` | ✅ |
-| `docs/UX_SPECIFICATION.md` | ✅ |
-| `docs/DESIGN_SYSTEM.md` | ✅ |
-| `docs/FRONTEND_ARCHITECTURE.md` | ✅ |
-| `docs/SQL_CONSOLE.md` | ✅ |
-| `docs/TESTING_STRATEGY.md` | ✅ |
-| `docs/SECURITY.md` | ✅ |
-| `docs/IMPLEMENTATION_PLAN.md` | ✅ (this file) |
-| `docs/ROADMAP.md` | ✅ |
-| `docs/DEVELOPMENT_GUIDE.md` | ✅ |
-| `docs/CODING_STANDARDS.md` | ✅ |
-| `docs/CONTRIBUTING.md` | ✅ |
-| `docs/KNOWN_LIMITATIONS.md` | ✅ |
-| `research/RESEARCH_PROBLEM.md` | ✅ |
-| `research/LITERATURE_REVIEW.md` | ✅ |
-| `research/EXPERIMENTAL_DESIGN.md` | ✅ |
-| `research/GROUND_TRUTH.md` | ✅ |
-| `research/BASELINE.md` | ✅ |
-| `research/METRICS.md` | ✅ |
-| `research/RESULTS_PROTOCOL.md` | ✅ |
-| `research/PAPER_PLAN.md` | ✅ |
+### Phase 1: Core Correctness & Adversarial Auditing
+- **Objective:** Audit existing engine behavior for causality, determinism, idempotency, and edge-case handling.
+- **Dependencies:** Phase 0 approved.
+- **Tasks:**
+  1. Add property-based tests for commutativity across all policies: $f(A, B) \equiv f(B, A)$.
+  2. Audit `SUM` behavior under negative numbers, zero, and missing ancestor values.
+  3. Audit `APPEND` behavior under empty strings, unicode characters, and duplicate inputs.
+  4. Audit `LWW` tie-breaking under identical physical and logical clock timestamps.
+  5. Validate atomic write-backs within local SQLite transactions (`BEGIN IMMEDIATE`).
+- **Acceptance Criteria:**
+  - New dedicated test suite `test_adversarial_resolution.py` passing 100%.
+  - Zero unhandled exceptions or state corruptions under invalid inputs.
 
 ---
 
-## Phase 3: Frontend — SemanticSync Studio 📋
-
-**Status:** Planned. Begins after Phase 2 is complete.
-
-### Milestones
-
-| # | Milestone | Description |
-|---|---|---|
-| 3.1 | Vite + React + Tailwind scaffold | `frontend/` project setup |
-| 3.2 | Layout shell | Sidebar, TopBar, routing |
-| 3.3 | API service layer | `services/api.js` — all endpoints |
-| 3.4 | Dashboard view | Database cards, conflict badges |
-| 3.5 | Schema & Policy Designer | Table/column browser, inline policy assignment with validation |
-| 3.6 | SQL Console | CodeMirror 6 editor, replica selector, results table |
-| 3.7 | Conflict Manager | Filtered list, expand/resolve UI |
-| 3.8 | Sync Control Panel | Run sync, generate conflict, result display |
-| 3.9 | Benchmark View | Workload selector, SCR bar chart, metrics table |
-| 3.10 | Seed + Onboarding | One-click seed all workloads from UI |
+### Phase 2: Full Row-Mutation Conflict Model
+- **Objective:** Expand conflict detection and resolution beyond cell-level UPDATE divergences.
+- **Dependencies:** Phase 1 complete.
+- **Tasks:**
+  1. **INSERT vs. INSERT:** Detect primary key collisions and secondary unique constraint violations. Implement configurable policy (`LWW`, `FLAG_FOR_REVIEW`, or rekeying for surrogate auto-increment keys).
+  2. **UPDATE vs. DELETE (Tombstones):** Introduce tombstone entries in `_ss_change_log` (`op_type = 'DELETE'`). Implement `TOMBSTONE_POLICY` (`DELETE_WINS`, `UPDATE_RESURRECTS`, `FLAG_FOR_REVIEW`).
+  3. **DELETE vs. DELETE:** Ensure concurrent deletes converge as an idempotent no-op without false-positive conflict generation.
+  4. **Recoverable Conflict Persistence:** Ensure all flagged row mutations include complete before/after row snapshots in `MergeManager`.
+- **Acceptance Criteria:**
+  - `ConflictDetector` detects insert collisions and update-delete discrepancies.
+  - New test file `test_mutation_conflicts.py` covering all row-mutation pairs passing 100%.
 
 ---
 
-## Phase 4: Research Evaluation 📋
-
-| # | Milestone | Description |
-|---|---|---|
-| 4.1 | Run all 3 workloads, record SCR | Raw benchmark output |
-| 4.2 | Run 100-trial experiment | Statistical stability of SCR |
-| 4.3 | Measure overhead (ms/conflict) | Performance characterization |
-| 4.4 | Document in `research/RESULTS_PROTOCOL.md` | Final recorded results |
+### Phase 3: Bounded Operations & N-Replica Validation
+- **Objective:** Implement `BOUNDED_SUM` and test convergence across $N \ge 3$ replicas.
+- **Dependencies:** Phase 2 complete.
+- **Tasks:**
+  1. Implement `BOUNDED_SUM` policy in `policy_registry.py` and `semantic_resolver.py`.
+  2. Implement underflow safety check: if delta merge results in value $< \text{min\_bound}$, emit status `flagged` with audit explanation.
+  3. Build multi-replica sync harness: simulate $N=3$ and $N=5$ replicas synchronizing in arbitrary sequential and interleaved orders.
+  4. Measure and document convergence guarantees and order-dependencies.
+- **Acceptance Criteria:**
+  - `BOUNDED_SUM` correctly resolves within bounds and flags underflows in tests.
+  - Multi-replica convergence test suite `test_n_replica_sync.py` passing 100%.
 
 ---
 
-## Phase 5: Polish + Paper 📋
+### Phase 4: Reproducible Benchmark Stress Harness
+- **Objective:** Scale benchmark workloads from 9 synthetic cases to 1,000–10,000 operations.
+- **Dependencies:** Phase 3 complete.
+- **Tasks:**
+  1. Build parametric synthetic workload generator in `backend/workloads/stress_harness.py`.
+  2. Support configurable conflict densities ($5\%, 20\%, 50\%$) and dataset sizes ($10^3, 10^4$).
+  3. Measure and export: $SCR$, $CR$, $VRA$, p50/p95/p99 latency, resolution overhead ($\Delta t$), and change log size.
+  4. Expose endpoint `POST /api/v1/benchmark/stress` in `routes_benchmark.py`.
+- **Acceptance Criteria:**
+  - Automated stress benchmark runs reproducibly in under 30 seconds for 1,000 conflicts.
+  - Baseline and SemanticSync receive strictly identical workloads.
+  - Raw JSON and CSV telemetry exported for paper reproducibility.
 
-| # | Milestone | Description |
-|---|---|---|
-| 5.1 | Write academic paper | Per `research/PAPER_PLAN.md` |
-| 5.2 | Final README update | Badges, demo GIF, quickstart |
-| 5.3 | Public release | GitHub release tag `v1.0.0` |
+---
+
+### Phase 5: Relational Foreign Key Invariant Extension
+- **Objective:** Detect and isolate foreign-key integrity violations during synchronization.
+- **Dependencies:** Phase 2 and Phase 3 complete.
+- **Tasks:**
+  1. Enable SQLite foreign key checking during sync write-back (`PRAGMA foreign_keys = ON`).
+  2. Implement orphan detection: catch foreign key constraint failures caused by parent deletions.
+  3. Route orphaned child rows into a dedicated `_ss_quarantine` table with reference metadata.
+  4. Provide manual recovery API: resolve orphan by re-linking to existing parent or deleting child.
+- **Acceptance Criteria:**
+  - Zero SQLite constraint errors crash the sync engine.
+  - All orphaned child records quarantined durably and inspectable via API.
+  - Dedicated test suite `test_foreign_key_invariants.py` passing 100%.
+
+---
+
+### Phase 6: Operational Log Compaction & Checkpoint
+- **Objective:** Implement causal stability pruning for `_ss_change_log`.
+- **Dependencies:** Phase 4 complete.
+- **Tasks:**
+  1. Track replica acknowledge vectors in `AppState`.
+  2. Compute stable causal horizon: $T_{\text{stable}} = \min_{r} T_{\text{ack}}(r)$.
+  3. Implement pruning routine: compact entries with $\text{HLC} < T_{\text{stable}}$ into base snapshot.
+- **Acceptance Criteria:**
+  - Change log storage reduced by $> 70\%$ following stable checkpointing.
+  - Slow/lagging replicas are not broken by premature pruning.
+
+---
+
+### Phase 7: Studio Integration & Research Release
+- **Objective:** Complete end-to-end user experience and publish academic research package.
+- **Dependencies:** Phases 1–6 complete.
+- **Tasks:**
+  1. Integrate new conflict types (orphans, tombstones, bound violations) into Studio `Conflicts.jsx`.
+  2. Hook stress benchmark telemetry into Studio `Analytics.jsx`.
+  3. Finalize complete documentation package and paper manuscript.
+- **Acceptance Criteria:**
+  - Studio UI builds cleanly and renders all metrics live.
+  - End-to-end regression test suite passing 100%.

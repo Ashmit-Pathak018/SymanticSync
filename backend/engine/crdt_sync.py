@@ -236,6 +236,7 @@ class CRDTSyncEngine:
         row_id: Any,
         column: str,
         new_value: Any,
+        custom_hlc: HLC | tuple[float, int] | None = None,
     ) -> str:
         """
         Write a new value to a replica and record the change in ``_ss_change_log``.
@@ -254,6 +255,8 @@ class CRDTSyncEngine:
             Target column name.
         new_value:
             The value to write.
+        custom_hlc:
+            Optional HLC instance or (ts_pt, ts_l) tuple to preserve causal timestamp.
 
         Returns
         -------
@@ -266,7 +269,17 @@ class CRDTSyncEngine:
             If the target row does not exist in the replica.
         """
         hlc = self._clocks.setdefault(replica_id, HLC(node_id=replica_id))
-        hlc.tick()
+        if custom_hlc is not None:
+            if isinstance(custom_hlc, HLC):
+                in_pt, in_l = custom_hlc.pt, custom_hlc.l
+            else:
+                in_pt, in_l = custom_hlc
+            # Advance local clock to maintain monotonicity past the received clock
+            hlc.tick(recv_pt=in_pt, recv_l=in_l)
+            ts_pt, ts_l = hlc.pt, hlc.l
+        else:
+            hlc.tick()
+            ts_pt, ts_l = hlc.pt, hlc.l
 
         change_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -313,8 +326,8 @@ class CRDTSyncEngine:
                     column,
                     str(old_value) if old_value is not None else None,
                     str(new_value) if new_value is not None else None,
-                    hlc.pt,
-                    hlc.l,
+                    ts_pt,
+                    ts_l,
                     replica_id,
                     now_iso,
                 ),
@@ -457,13 +470,29 @@ class CRDTSyncEngine:
             else:
                 # 3 — write-back to both replicas
                 resolved_val = resolution.resolved_value
+                # Ensure write-back timestamp strictly dominates both predecessor causal timestamps.
+                # Timestamps in ConflictInfo are composite floats: pt * 1e6 + l.
+                ts_a = conflict.replica_a_ts or 0.0
+                ts_b = conflict.replica_b_ts or 0.0
+                if ts_a > 0 or ts_b > 0:
+                    # Deconstruct into (pt, l) components
+                    pt_a, l_a = (ts_a // 1e6) / 1.0, int(round(ts_a % 1e6))
+                    pt_b, l_b = (ts_b // 1e6) / 1.0, int(round(ts_b % 1e6))
+                    max_pt = max(pt_a, pt_b)
+                    max_l = max(l_a, l_b) if pt_a == pt_b else (l_a if max_pt == pt_a else l_b)
+                    resolved_hlc = (max_pt, max_l + 1)
+                else:
+                    resolved_hlc = None
+
                 self._write_resolved(
                     replica_a_path, replica_a_id,
                     conflict.table, conflict.row_id, conflict.column, resolved_val,
+                    custom_hlc=resolved_hlc,
                 )
                 self._write_resolved(
                     replica_b_path, replica_b_id,
                     conflict.table, conflict.row_id, conflict.column, resolved_val,
+                    custom_hlc=resolved_hlc,
                 )
                 auto_resolved += 1
                 applied_changes.append(
@@ -521,10 +550,11 @@ class CRDTSyncEngine:
         row_id: Any,
         column: str,
         value: Any,
+        custom_hlc: HLC | tuple[float, int] | None = None,
     ) -> None:
         """Write a resolved value back to a replica, logging to change log."""
         try:
-            self.apply_change(db_path, replica_id, table, row_id, column, value)
+            self.apply_change(db_path, replica_id, table, row_id, column, value, custom_hlc=custom_hlc)
         except RuntimeError:
             # Row may not exist on one replica (insert-delete race) — skip
             pass

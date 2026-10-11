@@ -1,92 +1,59 @@
-# SemanticSync — Roadmap
+# SemanticSync — Strategic Roadmap
 
-**Version:** 1.0
+**Version:** 2.0 (Reconciled)  
+**Status:** Approved Technical Trajectory
 
 ---
 
-## Release Track
+## Phased Release Trajectory
 
 ```
-v0.1.0  ✅  Backend core + REST API (September 2026)
-v0.2.0  🔄  Documentation suite (October 2026)
-v0.3.0  📋  SemanticSync Studio frontend
-v0.4.0  📋  Research evaluation results
-v1.0.0  📋  First stable release + paper submission
+v0.1.0  ✅  Backend Core & REST API (Completed)
+v0.2.0  ✅  Documentation Suite & Reconciled Specs (Completed)
+v0.2.1  ✅  SemanticSync Studio Frontend Integration (Merged PR #1)
+v0.3.0  📋  Phase 1: Core Correctness & Property-Based Adversarial Tests
+v0.4.0  📋  Phase 2: Full Row-Mutation Model (INSERT, DELETE, Tombstones)
+v0.5.0  📋  Phase 3: BOUNDED_SUM Invariants & N-Replica Convergence
+v0.6.0  📋  Phase 4: Scaled Reproducible Benchmark Suite (1,000–10,000 ops)
+v0.7.0  📋  Phase 5: Foreign Key Referential Integrity & Orphan Quarantine
+v0.8.0  📋  Phase 6: Causal Stability Change-Log Compaction
+v1.0.0  📋  Phase 7: Studio Hardening, Artifact Release & Research Publication
 ```
 
 ---
 
-## Short-Term (v0.3.0 — Studio Frontend)
+## Detailed Milestone Objectives
 
-**Target:** November 2026
+### Next Milestone: v0.3.0 (Phase 1 — Core Correctness)
+- Property-based tests verifying commutativity for all symmetric policies.
+- Boundary condition validation: zero, negative deltas, empty text, unicode delimiters.
+- Strict transactional write-back locking with parameterized SQLite queries.
 
-- [ ] React 18 + Vite + Tailwind scaffold
-- [ ] Sidebar navigation shell
-- [ ] Dashboard view: workspace cards + conflict badges
-- [ ] Schema & Policy Designer: inline assignment + validation
-- [ ] SQL Console: CodeMirror 6 + replica selector + results table
-- [ ] Conflict Manager: list, filter, expand, manual resolve
-- [ ] Sync Control Panel: run sync + generate-conflict
-- [ ] Benchmark view: SCR bar chart + metrics table
-- [ ] One-click seed button for all workloads
+### Upcoming Milestone: v0.4.0 (Phase 2 — Full Row-Mutation Conflict Model)
+- Primary-key and secondary UNIQUE constraint conflict detection on concurrent insertions.
+- `UPDATE vs DELETE` tombstone conflict detection and resolution policies (`DELETE_WINS`, `UPDATE_RESURRECTS`, `FLAG_FOR_REVIEW`).
+- Idempotent `DELETE vs DELETE` convergence.
+- Rich row-level conflict recovery in `MergeManager`.
 
----
+### Mid-Term Milestone: v0.5.0 (Phase 3 — Bounded Invariants & N-Replicas)
+- Implementation of `BOUNDED_SUM` policy with floor/ceiling checks (`min_val=0`).
+- Multi-replica mesh testing ($N=3, 5$) under arbitrary synchronization orderings.
+- Formal documentation of convergence boundaries under non-idempotent operators.
 
-## Medium-Term (v0.4.0 — Research Evaluation)
+### Scaled Evaluation Milestone: v0.6.0 (Phase 4 — Scaled Benchmark Suite)
+- Parametric synthetic workload generation ($1,000$ to $10,000$ operations).
+- Controlled conflict densities ($5\%, 20\%, 50\%$).
+- Automated telemetry export: SCR, CR, VRA, p50/p95/p99 latency, and resolution overhead.
 
-**Target:** December 2026
+### Relational Extension Milestone: v0.7.0 (Phase 5 — Foreign Key Integrity)
+- Foreign key constraint enforcement (`PRAGMA foreign_keys = ON`).
+- Non-destructive orphan quarantine via `_ss_quarantine` table.
+- Quarantine inspection and resolution APIs.
 
-- [ ] Full benchmark suite across all 3 workloads (Inventory, Notes, Health)
-- [ ] 100-trial statistical stability experiment
-- [ ] Formal SCR calculation and recording
-- [ ] Resolution overhead profiling (ms/conflict)
-- [ ] Results documented in `research/RESULTS_PROTOCOL.md`
+### Operational Hardening: v0.8.0 (Phase 6 — Causal Log Compaction)
+- Stable horizon checkpointing based on minimum acknowledged replica HLC timestamps.
+- Automated compaction of `_ss_change_log` entries.
 
----
-
-## Long-Term (v1.0.0+ — Beyond v1)
-
-### Multi-Table Sync
-- Conflict detection across multiple related tables in a single sync run
-- JOIN-aware conflict scope
-
-### Multi-Replica Pairwise Sync
-- Extend sync to N replicas (not just pair-wise A vs B)
-- Topology-aware sync ordering (star, mesh, ring)
-
-### Network Transport Layer
-- Peer-to-peer change propagation over LAN
-- Change log exchange via HTTP or WebSockets
-- Delta sync (only changes since last checkpoint)
-
-### Policy Inheritance
-- Table-level default policies (fallback for unassigned columns)
-- Schema-level wildcard policies
-
-### INSERT Conflict Handling
-- Detect and resolve conflicts from concurrent row insertions with same PK
-- Configurable: reject, uuid-rename, or merge-by-timestamp
-
-### Binary/BLOB Policy Support
-- Hash-based comparison for BLOB fields
-- `LAST_WRITE_WINS_BLOB` policy using byte-level checksums
-
-### Plugin Policy API
-- Developer-defined custom policies via Python plugin interface
-- Policy lifecycle hooks (pre-resolve, post-resolve)
-
-### Studio UI Enhancements
-- Dark mode
-- Export benchmark results as CSV/PDF
-- Shareable conflict review links (local URL deep links)
-- Policy assignment template import/export (JSON)
-
----
-
-## Explicitly Out of Scope (v1)
-
-- Cloud synchronization or hosted backend
-- PostgreSQL, MySQL, MongoDB, or any non-SQLite database
-- Authentication or multi-user access control
-- Mobile client (iOS/Android)
-- Real-time collaborative editing (CRDTs operating on characters/keystrokes)
+### Research Release: v1.0.0 (Phase 7 — Academic Manuscript & Open Source Release)
+- Studio telemetry dashboard hooks for all metrics.
+- Complete reproducibility package and paper manuscript submission.

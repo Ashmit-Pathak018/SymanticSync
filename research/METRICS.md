@@ -1,51 +1,50 @@
-# SemanticSync — Evaluation Metrics
+# SemanticSync — Research Metrics & Quantitative Framework
 
-**Version:** 1.0
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 1. Primary Metric: Semantic Correctness Rate (SCR)
+## 1. Primary Research Metric: Semantic Correctness Rate ($SCR$)
 
-The primary benchmark metric introduced by this research is the **Semantic Correctness Rate ($SCR$)**, defined as the proportion of concurrent conflicts resolved in alignment with domain ground truth:
+The primary evaluative contribution of SemanticSync is the **Semantic Correctness Rate ($SCR$)**, defining the proportion of concurrent conflicts resolved in conformance with predetermined domain invariants:
 
 $$SCR = \frac{\sum_{i=1}^{N} \mathbb{I}(\text{Result}_i = \text{GroundTruth}_i)}{N} \times 100\%$$
 
 Where:
-- $N$ is the total number of evaluated concurrent conflict scenarios.
-- $\mathbb{I}(\cdot)$ is the indicator function returning $1$ if the evaluated resolution equals ground truth, and $0$ otherwise.
+- $N$ is the total count of evaluated concurrent conflicts.
+- $\mathbb{I}(\cdot) \in \{0, 1\}$ evaluates whether the output matches the independent ground-truth expectation.
 
-### Acceptance Threshold
-- **Baseline LWW:** Expected $SCR \le 35\%$ across heterogeneous workloads.
-- **SemanticSync:** Expected $SCR \ge 90\%$ (targeting $100\%$ on cleanly defined schema domains).
-
----
-
-## 2. Secondary Metric: Convergence Rate (CR)
-
-Measures whether replicas achieve bitwise state equivalence following synchronization:
-
-$$CR = \frac{\sum_{k=1}^{R} \mathbb{I}(\text{ReplicaState}_A^k \equiv \text{ReplicaState}_B^k)}{R} \times 100\%$$
-
-Where $R$ is the number of synchronized replica pairs.
-- Target for **both** Baseline LWW and SemanticSync: **$100.0\%$**.
+### Target Performance
+- **Baseline LWW:** Expected $SCR \le 35\%$ across heterogeneous workloads containing additive, append, or invariant columns.
+- **SemanticSync:** Target $SCR \ge 90\%$, achieving $100\%$ on workloads where schema policies correctly model all divergent fields.
 
 ---
 
-## 3. Secondary Metric: Validation Rejection Accuracy (VRA)
+## 2. Secondary Metrics
 
-Quantifies the system's ability to reject syntactically incompatible policy assignments at schema configuration time:
+### 2.1 State Convergence Rate ($CR$)
+Measures whether replicas reach bitwise-identical relational states after synchronization completes:
+
+$$CR = \frac{\sum_{k=1}^{R} \mathbb{I}(\text{Snapshot}_A^k \equiv \text{Snapshot}_B^k)}{R} \times 100\%$$
+
+- **Target:** **$100.0\%$** across all test runs for both Baseline and SemanticSync. Any divergence represents a synchronization failure.
+
+### 2.2 Validation Rejection Accuracy ($VRA$)
+Quantifies the system's ability to identify and reject invalid schema-policy pairings before runtime execution:
 
 $$VRA = \frac{TP + TN}{TP + TN + FP + FN} \times 100\%$$
 
-- Evaluated across test matrices in `backend/tests/test_validation.py`.
-- Target: **$100.0\%$** (zero type-mismatched policies permitted into runtime).
+- **Target:** **$100.0\%$**. Zero type-incompatible configurations (such as `AVG` on `TEXT` or `SUM` on `TEXT`) permitted to execute.
 
----
+### 2.3 Computational Resolution Overhead ($\Delta t$)
+Measures the per-conflict algorithmic processing latency:
 
-## 4. Performance Metric: Resolution Overhead ($\Delta t$)
+$$\Delta t = \frac{T_{\text{sync\_end}} - T_{\text{sync\_start}}}{N_{\text{conflicts}}} \quad (\mu s \text{ or } ms)$$
 
-The computational latency incurred by three-way diff inspection and policy resolution:
+- **Target:** $\Delta t < 1.0\text{ ms}$ on commodity developer hardware.
 
-$$\Delta t = \frac{T_{\text{sync\_end}} - T_{\text{sync\_start}}}{N_{\text{conflicts}}} \quad (\text{measured in milliseconds or microseconds})$$
+### 2.4 Change Log Compaction Efficiency ($CE$) (Phase 6)
+Measures storage savings achieved by pruning causally stable entries from `_ss_change_log`:
 
-- Target: $\Delta t < 1.0\text{ ms}$ per cell conflict on commodity hardware.
+$$CE = \frac{\text{Bytes}_{\text{uncompacted}} - \text{Bytes}_{\text{compacted}}}{\text{Bytes}_{\text{uncompacted}}} \times 100\%$$

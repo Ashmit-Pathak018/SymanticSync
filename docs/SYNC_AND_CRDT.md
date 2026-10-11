@@ -1,180 +1,180 @@
-# SemanticSync — CRDT Synchronization and Hybrid Logical Clocks
+# SemanticSync — Synchronization Mechanics & Logical Clocks
 
-**Version:** 1.0
-
----
-
-## 1. The Two-Layer Model
-
-SemanticSync uses a **two-layer** approach to synchronization:
-
-```
-Layer 1: CRDT Convergence (CRDTSyncEngine)
-   → Ensures all replicas agree on A common state
-   → Mechanism: Hybrid Logical Clock (HLC) + change log exchange
-
-Layer 2: Semantic Resolution (SemanticResolver)
-   → Ensures that common state is CORRECT according to domain meaning
-   → Mechanism: Policy-driven deterministic resolution functions
-```
-
-Generic CRDT frameworks provide Layer 1 but not Layer 2. SemanticSync adds Layer 2.
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 2. Hybrid Logical Clock (HLC)
+## 1. Synchronization Architecture
 
-SemanticSync uses HLC (Kulkarni et al., 2014) for ordering events across replicas.
+SemanticSync decouples event ordering and causality tracking from the semantic resolution of divergent values:
 
-### HLC Structure
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        SYNCHRONIZATION PIPELINE                        │
+├────────────────────────────────────────────────────────────────────────┤
+│ Layer 1: Causality & Event Ordering (HLC + _ss_change_log)             │
+│   - Assigns monotonically increasing causal timestamps                 │
+│   - Establishes partial and total orders across replica nodes          │
+├────────────────────────────────────────────────────────────────────────┤
+│ Layer 2: 3-Way Differential Divergence (ConflictDetector)              │
+│   - Compares ancestor snapshot with replica states                     │
+│   - Identifies clean updates vs. concurrent conflicts                  │
+├────────────────────────────────────────────────────────────────────────┤
+│ Layer 3: Semantic Policy Middleware (SemanticResolver)                 │
+│   - Applies schema-declared policies to conflicting cells              │
+│   - Preserves business intent (additive deltas, text preservation)     │
+├────────────────────────────────────────────────────────────────────────┤
+│ Layer 4: Transactional Write-Back (CRDTSyncEngine)                     │
+│   - Updates local SQLite replicas using parameterized SQL              │
+│   - Maintains audit logs and records flagged triage cases              │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Hybrid Logical Clock (HLC) Semantics
+
+Replicas use an HLC implementation based on Kulkarni et al. (2014):
+
+$$\text{HLC} = \langle pt, l, \text{node\_id} \rangle$$
+
+Where:
+- $pt \in \mathbb{R}$: Physical time in wall-clock seconds.
+- $l \in \mathbb{Z}_{\ge 0}$: Logical counter to order events occurring within the same physical tick.
+- $\text{node\_id} \in \text{String}$: Globally unique node identifier (UUID).
+
+### State Transition Rules
+
+#### On Local Send / Write
 ```python
-@dataclass
-class HLC:
-    pt: float   # Physical timestamp (wall-clock seconds)
-    l: int      # Logical counter (incremented on ties)
-    node_id: str  # Unique replica identifier
+wall = time.time()
+if wall > self.pt:
+    self.pt = wall
+    self.l = 0
+else:
+    self.l += 1
 ```
 
-### HLC Properties
-- Always advances monotonically, even when wall clocks are identical
-- Preserves causality: if event A caused event B, `hlc(A) < hlc(B)`
-- Deterministic tie-breaking via `node_id` lexicographic comparison
+#### On Remote Message Receive $(\text{recv\_pt}, \text{recv\_l})$
+```python
+wall = time.time()
+max_pt = max(self.pt, recv_pt, wall)
 
-### HLC Tick Algorithm
-```
-On SEND:
-    pt = max(self.pt, physical_time())
-    if pt == self.pt: l += 1
-    else: l = 0
-    self.pt = pt
+if max_pt == self.pt == recv_pt:
+    self.l = max(self.l, recv_l) + 1
+elif max_pt == self.pt:
+    self.l += 1
+elif max_pt == recv_pt:
+    self.l = recv_l + 1
+else:
+    self.l = 0
 
-On RECEIVE(recv_pt, recv_l):
-    pt = max(self.pt, recv_pt, physical_time())
-    if pt == self.pt == recv_pt: l = max(self.l, recv_l) + 1
-    elif pt == self.pt: l += 1
-    elif pt == recv_pt: l = recv_l + 1
-    else: l = 0
+self.pt = max_pt
 ```
+
+### Ordering Predicate
+Given two clocks $\tau_1 = \langle pt_1, l_1, \text{id}_1 \rangle$ and $\tau_2 = \langle pt_2, l_2, \text{id}_2 \rangle$:
+$$\tau_1 < \tau_2 \iff (pt_1 < pt_2) \lor (pt_1 = pt_2 \land l_1 < l_2) \lor (pt_1 = pt_2 \land l_1 = l_2 \land \text{id}_1 < \text{id}_2)$$
+
+This establishes a strict total order across all tracked operations.
 
 ---
 
-## 3. Change Log (`_ss_change_log`)
+## 3. Change Log Tracking (`_ss_change_log`)
 
-Every replica maintains a `_ss_change_log` table created by `CRDTSyncEngine.create_replica()`:
+Every tracked replica maintains a change log table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS _ss_change_log (
-    id           TEXT PRIMARY KEY,    -- UUID4 change identifier
-    table_name   TEXT NOT NULL,       -- Target table
-    row_id       TEXT NOT NULL,       -- Row primary key value
-    column_name  TEXT NOT NULL,       -- Column modified
-    old_value    TEXT,                -- Value before this change
-    new_value    TEXT,                -- Value after this change
-    ts_pt        REAL NOT NULL,       -- HLC physical timestamp
-    ts_l         INTEGER NOT NULL,    -- HLC logical counter
-    replica_id   TEXT NOT NULL,       -- Which replica made the change
-    applied_at   TEXT NOT NULL        -- ISO-8601 UTC wall timestamp
+    id           TEXT PRIMARY KEY,
+    table_name   TEXT NOT NULL,
+    row_id       TEXT NOT NULL,
+    column_name  TEXT NOT NULL,
+    old_value    TEXT,
+    new_value    TEXT,
+    ts_pt        REAL NOT NULL,
+    ts_l         INTEGER NOT NULL,
+    replica_id   TEXT NOT NULL,
+    applied_at   TEXT NOT NULL
 );
 ```
 
-Every tracked write via `CRDTSyncEngine.apply_change()` inserts a row into this log.
+### Log Lifecycle & Pruning Constraints (Phase 6)
+- **Current Behavior:** Log entries accumulate indefinitely for each tracked write.
+- **Safety Pruning Rule:** Changes **must never** be pruned simply because one replica has read them. Pruning requires a **Causal Stability Check**:
+  $$\text{Stable Timestamp } T_{\text{stable}} = \min_{r \in \text{Replicas}} \text{AckTimestamp}(r)$$
+  Only entries with $\text{HLC} < T_{\text{stable}}$ across all enrolled replicas can be compacted into base snapshots.
 
 ---
 
-## 4. Replica Management
+## 4. Write-Back Causal Dominance
 
-### Creating a Replica
-```python
-engine = CRDTSyncEngine(base_db_path="data/inventory.db", data_dir="data")
-replica_path = engine.create_replica("device_a")
-```
-
-Steps:
-1. `shutil.copy2(base_db_path, "data/device_a.db")` — fork the base
-2. Execute `CREATE TABLE IF NOT EXISTS _ss_change_log ...` in the copy
-3. Initialize a `HLC` clock for `device_a`
-4. Return the path to the new replica
-
-### Applying a Tracked Change
-```python
-engine.apply_change(
-    replica_db_path="data/device_a.db",
-    replica_id="device_a",
-    table="products",
-    row_id=1,
-    column="quantity",
-    new_value=115
-)
-```
-
-Steps:
-1. Read current (old) value from replica
-2. Execute parameterized `UPDATE` on the replica
-3. Tick the HLC clock for this replica
-4. Insert a row into `_ss_change_log`
-5. Return the change_id
-
----
-
-## 5. Full Sync Pipeline
-
-`CRDTSyncEngine.sync_replicas()` orchestrates the complete synchronization:
-
-```
-sync_replicas(
-    replica_a_path, replica_b_path, base_path,
-    replica_a_id, replica_b_id,
-    policies: { table: { column: policy_name } }
-)
-```
+When `sync_replicas()` resolves a conflict and writes the merged value back to both replicas, the write-back must be stamped with a timestamp that **strictly dominates** both input timestamps. Otherwise, a subsequent pairwise sync could misidentify the write-back as an older mutation, reversing a correctly resolved conflict.
 
 ### Algorithm
 
-```
-1. ConflictDetector.detect(a, b, base, id_a, id_b)
-   → conflicts: list[ConflictInfo]
+Given the composite timestamps of the two input log entries:
+$$\tau_A = pt_A \times 10^6 + l_A, \quad \tau_B = pt_B \times 10^6 + l_B$$
 
-2. For each conflict in conflicts:
-   a. Get HLC timestamps from _ss_change_log for this cell
-   b. Look up policy from `policies` dict; default "REJECT"
-   c. Get normalized column type via SchemaInspector
-   d. PolicyValidator.validate(policy, col_type)
-      → If invalid: treat as REJECT
-   e. SemanticResolver.resolve(
-          policy, base_val, val_a, val_b,
-          ts_a, ts_b, id_a, id_b
-      )
-      → ResolutionResult { status, resolved_value }
+The write-back clock is computed as:
+$$pt_{\text{wb}} = \max(pt_A, pt_B), \quad l_{\text{wb}} = \max(l_A, l_B) + 1$$
 
-3. If status == "resolved":
-   → _write_resolved(replica_a_path, ..., resolved_value)
-   → _write_resolved(replica_b_path, ..., resolved_value)
-   → auto_resolved += 1
+This ensures:
+$$\tau_{\text{wb}} = pt_{\text{wb}} \times 10^6 + l_{\text{wb}} > \max(\tau_A, \tau_B)$$
 
-4. If status == "flagged":
-   → MergeManager.add_conflict(conflict)
-   → MergeManager.apply_resolution(conflict_id, resolution)
-   → flagged_conflicts.append(conflict_id)
+The write-back is then logged into `_ss_change_log` for both replicas using the post-tick HLC value (not the raw pre-tick custom value).
 
-5. Return SyncResult {
-   total_conflicts, auto_resolved, flagged_for_review,
-   applied_changes, flagged_conflicts, duration_ms
-}
-```
+### Write-Back Timestamp Isolation in Conflict Detection
 
----
+A critical correctness property: when `_build_ts_map` in `ConflictDetector` reconstructs the authoritative timestamp for a `(table, row_id, column)` key, it must return the **earliest (original mutation) timestamp**, not the latest write-back timestamp.
 
-## 6. Convergence Guarantee
+If write-back timestamps were returned, subsequent pairwise syncs would falsely treat the write-back entry as the authoritative causal epoch, causing LWW to select the wrong winner. For example:
 
-Given the same base state and the same two replica states:
-- **All symmetric policies** (SUM, AVG, MIN, MAX, APPEND, REJECT) produce **identical results** regardless of which replica is passed as `a` vs `b`
-- **LWW** produces identical results due to deterministic timestamp + replica_id ordering
-- **Both replicas are updated with the same resolved value** in a single sync run
+1. `sync(A, B)` → resolves in B's favor → write-back logged on B with $\tau_{\text{wb}} > \tau_A, \tau_B$.
+2. `sync(B, C)` runs. Without isolation, `_build_ts_map` for B returns $\tau_{\text{wb}}$ (very high) instead of B's original $\tau_B$.
+3. B appears newer than C's original mutation → LWW incorrectly picks B over C.
 
-Therefore, after `sync_replicas()`, `replica_a[table][row][col] == replica_b[table][row][col]` for all auto-resolved conflicts.
+**Fix (implemented in `_build_ts_map`):** Keeps the **minimum** composite timestamp per `(table, row_id, column)` key, so write-back log entries do not contaminate subsequent sync decisions.
+
+### Scalar HLC vs. Vector Clocks
+
+The scalar HLC used by SemanticSync establishes a **total order** over observed events on a single replica. It does **not** track causal dependencies between arbitrary pairs of replicas (that requires a vector clock or causal history). Specifically:
+
+- HLC ordering is sufficient for **LWW** (single register with timestamp total order).
+- HLC ordering is **not** sufficient to prove general CRDT convergence for `SUM` or `AVG` across mesh topologies.
+- Multi-hop causal dependencies (A mutates, B reads A's mutation, B mutates) are not captured — only A→B direct exchange is causal.
 
 ---
 
-## 7. Delta Sync
+## 5. Convergence — Tested Schedules vs. General Proofs
 
-`get_changes_since(replica_path, since_ts)` returns all `_ss_change_log` entries with `(ts_pt * 1e6 + ts_l) > since_ts`. This enables incremental sync in future versions — only exchange changes made after the last sync checkpoint.
+### Pairwise Convergence (Implemented)
+When two replicas $R_A$ and $R_B$ synchronize against a base snapshot:
+1. `ConflictDetector` identifies cells where both diverged.
+2. For symmetric policies (`SUM`, `MIN`, `MAX`, `APPEND`), the resolved value is identical regardless of argument order.
+3. For `LWW`, the total order over HLC ensures identical winner selection.
+4. The resolved value is written back to both replicas within a local SQLite transaction.
+5. Replicas reach state equivalence: $S_A \equiv S_B$.
+
+### 3-Replica LWW Convergence — Verified Schedule Only
+
+The test `test_three_replica_pairwise_sync_convergence_with_lww` verifies the following specific schedule:
+
+$$\text{sync}(A, B) \;\to\; \text{sync}(B, C) \;\to\; \text{sync}(A, C)$$
+
+with 10 ms wall-clock gaps between each mutation (ensuring strict HLC ordering). The test **passes** with the write-back timestamp isolation fix applied.
+
+> [!IMPORTANT]
+> This is evidence for **one specific sync schedule** under strict timestamp ordering. It is **NOT** a general convergence proof for:
+> - Arbitrary sync orderings (e.g., $C \leftrightarrow A$ before $B \leftrightarrow A$)
+> - Non-LWW policies (SUM, AVG, APPEND) under 3-replica mesh topologies
+> - Simultaneous concurrent mutations across all 3 replicas
+> - More than 3 replicas
+
+### N-Replica Topology (Phase 3 Specification)
+In peer-to-peer or mesh networks with $N \ge 3$ replicas:
+- **Lattice Policies (`MIN`, `MAX`, `LWW`):** Converge under arbitrary pairwise sync orderings because the operators are associative and idempotent.
+- **Non-Idempotent Policies (`SUM`, `AVG`):** Standard 3-way pairwise diff without per-node delta vectors can lead to double-counting if an update is synced via multiple intermediate paths ($A \to B \to C$ and $A \to C$).
+- **Requirement for Phase 3:** Validate $N \ge 3$ sync topologies, quantify order-dependence, and document exact topology assumptions.
+

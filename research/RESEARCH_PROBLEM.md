@@ -1,37 +1,45 @@
 # SemanticSync — Research Problem Formulation
 
-**Version:** 1.0  
-**Authors:** SemanticSync Research Team  
-**Subject:** Declarative Semantic Conflict Resolution in Distributed Relational Replicas
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification  
+**Field:** Distributed Systems, Local-First Software, Replicated Relational Middleware
 
 ---
 
-## 1. Abstract Problem
+## 1. Problem Formulation
 
-In decentralized, local-first, and multi-master relational data architectures, concurrent offline operations inherently lead to data divergence. State-based and operation-based Conflict-Free Replicated Data Types (CRDTs) guarantee Strong Eventual Consistency (SEC) across replicas by enforcing a mathematically proven join-semilattice or commutative operation graph.
+Distributed, edge, and local-first software architectures increasingly store application state in embedded relational databases, predominantly SQLite. When autonomous replicas perform disconnected local mutations, replicas diverge.
 
-However, standard CRDT primitives suffer from **semantic blindness**:
-- **Last-Write-Wins (LWW)** registers resolve conflicts by ordering wall-clock or logical timestamps, inevitably discarding one replica's mutation entirely regardless of the domain intent.
-- **Syntactic Merges** treat database columns as generic primitive types (scalars, strings, or registers) rather than domain quantities (e.g., inventories, cumulative counters, clinical notes, invariant identifiers).
+Conflict-Free Replicated Data Types (CRDTs) provide mathematical foundations for Strong Eventual Consistency (SEC): given identical sets of mutations delivered across replicas, replicas converge to bitwise-identical states without distributed consensus.
 
-This disparity introduces the **Semantic Correctness Deficit**: while all replicas converge to identical bitwise states (guaranteeing SEC), the converged state frequently violates user expectations, loses business operations, or corrupts domain invariants.
+However, generic state-based and operation-based CRDT registers deployed in production typically operate with **semantic blindness**:
+- **Last-Write-Wins (LWW) Registers:** Select a winning value based on physical wall-clock timestamps or logical counters. In relational tables, this discards concurrent additive increments (e.g., inventory depletions or ledger increments), truncates collaborative textual annotations, and silently overwrites invariant keys.
+- **Syntactic Multi-Value Registers (MVR):** Retain conflicting values as a set, deferring resolution to the application layer. In structured relational schemas with typed columns and constraints (`NOT NULL`, `CHECK`, `FOREIGN KEY`), unconstrained value sets break relational invariants.
 
----
+### The Research Question
 
-## 2. Research Questions (RQ)
-
-- **RQ1 (Semantic Efficacy):** Can declarative, column-level semantic policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`) measurably improve the rate of domain-correct state reconciliations compared to standard LWW CRDT baselines under concurrent divergent mutations?
-- **RQ2 (Determinism & Convergence):** Can a semantic resolution layer preserve the convergence guarantees (SEC) of standard CRDTs across arbitrary replica topologies without introducing nondeterministic divergence or infinite sync loops?
-- **RQ3 (Computational Overhead):** What is the runtime latency and memory overhead of three-way diffing and semantic evaluation compared to pure timestamp-based register assignment during database synchronization?
+> **Can schema-level, domain-independent semantic policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`, `MIN`, `MAX`) be integrated into a relational synchronization middleware over SQLite such that: (1) semantic correctness under concurrent divergence is measurably improved over generic LWW registers, (2) deterministic convergence is maintained under specified assumptions, and (3) foreign-key and row-level invariants are preserved without full two-phase commit?**
 
 ---
 
-## 3. Scope and Hypothesis
+## 2. Research Scope & Boundaries of Contribution
 
-### Hypothesis
-*By decoupling CRDT synchronization mechanics from column-level conflict resolution through declarative, schema-registered semantic policies, distributed SQLite replicas can achieve a significantly higher Semantic Correctness Rate ($SCR \ge 90\%$) than timestamp-based LWW registers ($SCR \le 40\%$) while maintaining deterministic state convergence and sub-millisecond per-cell resolution overhead.*
+### What SemanticSync Contributes
+1. **Schema-Level Policy Integration:** Explicit, declarative column-level merge policies mapped to standard SQLite schemas and validated for datatype compatibility prior to runtime execution.
+2. **Deterministic Reconciliation Semantics:** Formal specification of state requirements, operation histories, and exact merge operators for each policy.
+3. **Reproducible Comparative Evaluation:** An empirical evaluation harness measuring Semantic Correctness Rate ($SCR$), state convergence, validation accuracy, and overhead against a controlled baseline.
+4. **Relational Conflict Taxonomy:** A structured classification of relational mutation conflicts beyond simple update divergence (including insert collisions, update vs. delete, and foreign key orphans).
 
-### Scope Boundaries
-1. **Target Engine:** Local relational storage (SQLite 3).
-2. **Conflict Granularity:** Cell-level concurrent divergence on shared primary keys (UPDATE vs. UPDATE).
-3. **Topology:** Multi-replica edge devices communicating asynchronously via snapshot/log exchange.
+### What SemanticSync Does NOT Claim to Invent
+- **CRDTs:** Invented by Shapiro et al. (2011). SemanticSync uses CRDT and HLC mechanisms where applicable.
+- **Local-First Software:** Conceptualized by Kleppmann et al. (2019).
+- **Per-Field Merging:** Prior systems (e.g., Lotus Notes, CouchDB, Git) have merged fields; SemanticSync formalizes schema-declared semantics for relational replicas.
+- **General Consensus:** SemanticSync operates within asynchronous, coordination-free replication models; it does not replace Paxos/Raft for linearizable transactions.
+
+---
+
+## 3. Concrete Research Hypotheses
+
+- **H1 (Semantic Accuracy):** On workloads exhibiting additive, cumulative, or invariant-guarded concurrent updates, declarative semantic policies achieve an $SCR \ge 90\%$ against predefined ground truths, compared to $\le 40\%$ for pure LWW registers.
+- **H2 (Convergence Preservation):** For all policies satisfying commutativity, associativity, and idempotency (or evaluated with deterministic tie-breaking over causal histories), multi-replica convergence ($CR$) remains strictly $100\%$.
+- **H3 (Minimal Overhead):** Three-way differential detection and policy evaluation introduce sub-millisecond per-cell resolution overhead, representing less than $5\%$ of local SQLite transaction commit latency.

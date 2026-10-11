@@ -234,8 +234,14 @@ class ConflictDetector:
             ).fetchall()
             for row in rows:
                 key = (row["table_name"], row["row_id"], row["column_name"])
-                # Use ts_pt as primary; ts_l breaks ties within same physical time
-                ts_map[key] = float(row["ts_pt"]) * 1e6 + float(row["ts_l"] or 0)
+                # Keep the MINIMUM (earliest/original) composite timestamp per key.
+                # Write-back entries logged during sync have higher timestamps than
+                # the original mutation; retaining the minimum ensures that write-back
+                # entries do not inflate the authoritative timestamp and corrupt LWW
+                # decisions in subsequent pairwise syncs.
+                ts = float(row["ts_pt"]) * 1e6 + float(row["ts_l"] or 0)
+                if key not in ts_map or ts < ts_map[key]:
+                    ts_map[key] = ts
         except sqlite3.OperationalError:
             # _ss_change_log table absent — caller will use fallback timestamp
             pass
