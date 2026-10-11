@@ -151,6 +151,10 @@ class SyncRequest(BaseModel):
     db_id: str
     replica_a_id: str
     replica_b_id: str
+    tombstone_policy: Optional[str] = Field(
+        "FLAG_FOR_REVIEW",
+        description="Policy for concurrent UPDATE vs DELETE: 'FLAG_FOR_REVIEW', 'DELETE_WINS', 'UPDATE_RESURRECTS'.",
+    )
 
 
 class GenerateConflictRequest(BaseModel):

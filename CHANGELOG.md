@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-10-11
+
+### Added — Phase 2: Full Row-Mutation Conflict Model
+- **Row-Mutation Conflict Taxonomy (`backend/engine/conflict_detector.py`):**
+  - Full relational mutation lifecycle: `INSERT vs INSERT` (PK & UNIQUE collisions), `UPDATE vs DELETE` (concurrent & tombstone), `DELETE vs DELETE` (idempotent agreement).
+  - Extended `ConflictInfo` dataclass with `conflict_type`, `status`, `resolution_mode`, `resolved_value`, and `explanation`.
+  - Secondary UNIQUE constraint/index collision discovery via SQLite PRAGMA inspection.
+  - Distinct handling for identical duplicate delivery (zero false conflicts).
+- **CRDT Sync Engine Row Mutations (`backend/engine/crdt_sync.py`):**
+  - Added `apply_insert()` and `apply_delete()` methods for tracked row-level operations with explicit `op_type` in `_ss_change_log`.
+  - Configurable tombstone policy resolution: `FLAG_FOR_REVIEW` (default safety stop), `DELETE_WINS`, and `UPDATE_RESURRECTS`.
+- **API & State Layer Integration (`backend/api/`):**
+  - Updated Pydantic schemas in `models.py` with `tombstone_policy` and `conflict_type`.
+  - Updated `routes_conflicts.py` and `routes_sync.py` to preserve row-level payloads and execute row-level manual/auto resolutions.
+- **Automated Test Suite (`backend/tests/test_mutation_conflicts.py`):**
+  - 10 comprehensive tests verifying each supported mutation class: PK collisions, UNIQUE collisions, identical delivery idempotency, UPDATE vs DELETE default review and policies, 3-replica DELETE convergence, repeat sync idempotency, and audit trails.
+  - Total test count expanded to 92 passing tests.
+
+---
+
 ## [0.2.1] - 2026-10-10
 
 ### Added

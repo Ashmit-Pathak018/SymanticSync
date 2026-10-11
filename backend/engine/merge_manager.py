@@ -58,6 +58,7 @@ class MergeManager:
                 "table": conflict.table,
                 "row_id": conflict.row_id,
                 "column": conflict.column,
+                "conflict_type": getattr(conflict, "conflict_type", "UPDATE_UPDATE"),
                 "base_value": conflict.base_value,
                 "value_a": conflict.replica_a_value,
                 "value_b": conflict.replica_b_value,
@@ -65,7 +66,8 @@ class MergeManager:
                 "replica_b_id": conflict.replica_b_id,
                 "replica_a_ts": conflict.replica_a_ts,
                 "replica_b_ts": conflict.replica_b_ts,
-                "status": "pending",
+                "status": getattr(conflict, "status", "pending"),
+                "explanation": getattr(conflict, "explanation", None),
                 "detected_at": getattr(
                     conflict, "detected_at", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 ),

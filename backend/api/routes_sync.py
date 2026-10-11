@@ -86,6 +86,11 @@ def run_sync(body: SyncRequest) -> dict[str, Any]:
             tbl, col = parts
             nested_policies.setdefault(tbl, {})[col] = pol
 
+    # Set table-level tombstone policy if provided
+    tombstone_pol = getattr(body, "tombstone_policy", "FLAG_FOR_REVIEW") or "FLAG_FOR_REVIEW"
+    for tbl in list(nested_policies.keys()):
+        nested_policies[tbl]["__tombstone__"] = tombstone_pol
+
     result = _sync_engine.sync_replicas(
         replica_a_path=rep_a_path,
         replica_b_path=rep_b_path,

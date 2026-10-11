@@ -161,9 +161,19 @@ CREATE TABLE IF NOT EXISTS _ss_change_log (
     ts_pt        REAL NOT NULL,
     ts_l         INTEGER NOT NULL DEFAULT 0,
     replica_id   TEXT NOT NULL,
-    applied_at   TEXT NOT NULL
+    applied_at   TEXT NOT NULL,
+    op_type      TEXT NOT NULL DEFAULT 'UPDATE'
 )
 """
+
+def _ensure_change_log_table(conn: sqlite3.Connection) -> None:
+    conn.execute(_CHANGE_LOG_DDL)
+    # Check if op_type column exists (migration for existing tables)
+    pragma = conn.execute('PRAGMA table_info("_ss_change_log")').fetchall()
+    col_names = [r[1] for r in pragma]
+    if "op_type" not in col_names:
+        conn.execute("ALTER TABLE _ss_change_log ADD COLUMN op_type TEXT NOT NULL DEFAULT 'UPDATE'")
+        conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +295,7 @@ class CRDTSyncEngine:
         now_iso = datetime.now(timezone.utc).isoformat()
 
         with sqlite3.connect(replica_db_path) as conn:
-            conn.execute(_CHANGE_LOG_DDL)  # idempotent
+            _ensure_change_log_table(conn)
 
             # Discover PK column name dynamically
             pk_col = self._get_pk_column(conn, table)
@@ -316,8 +326,8 @@ class CRDTSyncEngine:
                 """
                 INSERT INTO _ss_change_log
                     (id, table_name, row_id, column_name, old_value, new_value,
-                     ts_pt, ts_l, replica_id, applied_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ts_pt, ts_l, replica_id, applied_at, op_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'UPDATE')
                 """,
                 (
                     change_id,
@@ -335,6 +345,143 @@ class CRDTSyncEngine:
             conn.commit()
 
         return change_id
+
+    def apply_insert(
+        self,
+        replica_db_path: str,
+        replica_id: str,
+        table: str,
+        row_dict: dict[str, Any],
+        custom_hlc: HLC | tuple[float, int] | None = None,
+    ) -> str:
+        """
+        Insert a full row into a replica and record an INSERT operation in ``_ss_change_log``.
+        """
+        import json
+        hlc = self._clocks.setdefault(replica_id, HLC(node_id=replica_id))
+        if custom_hlc is not None:
+            if isinstance(custom_hlc, HLC):
+                in_pt, in_l = custom_hlc.pt, custom_hlc.l
+            else:
+                in_pt, in_l = custom_hlc
+            hlc.tick(recv_pt=in_pt, recv_l=in_l)
+            ts_pt, ts_l = hlc.pt, hlc.l
+        else:
+            hlc.tick()
+            ts_pt, ts_l = hlc.pt, hlc.l
+
+        change_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        with sqlite3.connect(replica_db_path) as conn:
+            _ensure_change_log_table(conn)
+            pk_col = self._get_pk_column(conn, table)
+            if pk_col is None:
+                raise RuntimeError(f"Cannot insert: table '{table}' has no single-column primary key.")
+
+            row_id = row_dict.get(pk_col)
+            cols = list(row_dict.keys())
+            placeholders = ", ".join("?" for _ in cols)
+            col_names = ", ".join(f'"{c}"' for c in cols)
+            values = [row_dict[c] for c in cols]
+
+            conn.execute(
+                f'INSERT INTO "{table}" ({col_names}) VALUES ({placeholders})',
+                values,
+            )
+
+            conn.execute(
+                """
+                INSERT INTO _ss_change_log
+                    (id, table_name, row_id, column_name, old_value, new_value,
+                     ts_pt, ts_l, replica_id, applied_at, op_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'INSERT')
+                """,
+                (
+                    change_id,
+                    table,
+                    str(row_id),
+                    "*",
+                    None,
+                    json.dumps(row_dict, default=str),
+                    ts_pt,
+                    ts_l,
+                    replica_id,
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+        return change_id
+
+    def apply_delete(
+        self,
+        replica_db_path: str,
+        replica_id: str,
+        table: str,
+        row_id: Any,
+        custom_hlc: HLC | tuple[float, int] | None = None,
+    ) -> str:
+        """
+        Delete a row from a replica and record an explicit DELETE tombstone in ``_ss_change_log``.
+        """
+        import json
+        hlc = self._clocks.setdefault(replica_id, HLC(node_id=replica_id))
+        if custom_hlc is not None:
+            if isinstance(custom_hlc, HLC):
+                in_pt, in_l = custom_hlc.pt, custom_hlc.l
+            else:
+                in_pt, in_l = custom_hlc
+            hlc.tick(recv_pt=in_pt, recv_l=in_l)
+            ts_pt, ts_l = hlc.pt, hlc.l
+        else:
+            hlc.tick()
+            ts_pt, ts_l = hlc.pt, hlc.l
+
+        change_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        with sqlite3.connect(replica_db_path) as conn:
+            _ensure_change_log_table(conn)
+            pk_col = self._get_pk_column(conn, table)
+            if pk_col is None:
+                raise RuntimeError(f"Cannot delete: table '{table}' has no single-column primary key.")
+
+            row = conn.execute(
+                f'SELECT * FROM "{table}" WHERE "{pk_col}" = ?',
+                (row_id,),
+            ).fetchone()
+            old_data = dict(zip([d[0] for d in conn.execute(f'SELECT * FROM "{table}" LIMIT 1').description], row)) if row else None
+
+            conn.execute(
+                f'DELETE FROM "{table}" WHERE "{pk_col}" = ?',
+                (row_id,),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO _ss_change_log
+                    (id, table_name, row_id, column_name, old_value, new_value,
+                     ts_pt, ts_l, replica_id, applied_at, op_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DELETE')
+                """,
+                (
+                    change_id,
+                    table,
+                    str(row_id),
+                    "*",
+                    json.dumps(old_data, default=str) if old_data else None,
+                    None,
+                    ts_pt,
+                    ts_l,
+                    replica_id,
+                    now_iso,
+                ),
+            )
+            conn.commit()
+
+        return change_id
+
 
     # -----------------------------------------------------------------------
     # Change log query
@@ -430,6 +577,81 @@ class CRDTSyncEngine:
 
         # 2 — resolve each conflict
         for conflict in conflicts:
+            conflict_type = getattr(conflict, "conflict_type", "UPDATE_UPDATE")
+
+            # ---------------------------------------------------------------
+            # Row-mutation conflicts (INSERT_INSERT, UPDATE_DELETE, UNIQUE_COLLISION)
+            # ---------------------------------------------------------------
+            if conflict_type in ("INSERT_INSERT", "UNIQUE_COLLISION"):
+                # Default safety rule: Always preserve evidence and flag for review
+                self._manager.add_conflict(conflict)
+                flagged_conflicts.append(conflict.conflict_id)
+                continue
+
+            elif conflict_type == "UPDATE_DELETE":
+                # Handle tombstone policy: FLAG_FOR_REVIEW (default), DELETE_WINS, UPDATE_RESURRECTS
+                tombstone_policy = policies.get(conflict.table, {}).get("__tombstone__", "FLAG_FOR_REVIEW")
+                if tombstone_policy == "FLAG_FOR_REVIEW":
+                    self._manager.add_conflict(conflict)
+                    flagged_conflicts.append(conflict.conflict_id)
+                    continue
+                elif tombstone_policy == "DELETE_WINS":
+                    # Delete wins: ensure row is deleted on both replicas
+                    # Write deletion tombstone
+                    ts_max = max(conflict.replica_a_ts or 0.0, conflict.replica_b_ts or 0.0)
+                    pt = (ts_max // 1e6) / 1.0
+                    l = int(round(ts_max % 1e6)) + 1
+                    try:
+                        self.apply_delete(replica_a_path, replica_a_id, conflict.table, conflict.row_id, custom_hlc=(pt, l))
+                    except Exception:
+                        pass
+                    try:
+                        self.apply_delete(replica_b_path, replica_b_id, conflict.table, conflict.row_id, custom_hlc=(pt, l))
+                    except Exception:
+                        pass
+                    auto_resolved += 1
+                    applied_changes.append({
+                        "conflict_id": conflict.conflict_id,
+                        "table": conflict.table,
+                        "row_id": conflict.row_id,
+                        "column": "*",
+                        "resolved_value": None,
+                        "policy": "DELETE_WINS",
+                        "explanation": "UPDATE vs DELETE resolved via DELETE_WINS tombstone policy.",
+                    })
+                    continue
+                elif tombstone_policy == "UPDATE_RESURRECTS":
+                    # The updated payload wins and is inserted/kept on both
+                    winning_row = conflict.replica_a_value or conflict.replica_b_value
+                    ts_max = max(conflict.replica_a_ts or 0.0, conflict.replica_b_ts or 0.0)
+                    pt = (ts_max // 1e6) / 1.0
+                    l = int(round(ts_max % 1e6)) + 1
+                    if isinstance(winning_row, dict):
+                        # Ensure row is present on both replicas
+                        for r_path, r_id in [(replica_a_path, replica_a_id), (replica_b_path, replica_b_id)]:
+                            try:
+                                self.apply_insert(r_path, r_id, conflict.table, winning_row, custom_hlc=(pt, l))
+                            except Exception:
+                                # Row might already exist, update instead
+                                pk_c = self._get_pk_column(sqlite3.connect(r_path), conflict.table)
+                                for c, val in winning_row.items():
+                                    if c != pk_c:
+                                        self._write_resolved(r_path, r_id, conflict.table, conflict.row_id, c, val, custom_hlc=(pt, l))
+                    auto_resolved += 1
+                    applied_changes.append({
+                        "conflict_id": conflict.conflict_id,
+                        "table": conflict.table,
+                        "row_id": conflict.row_id,
+                        "column": "*",
+                        "resolved_value": winning_row,
+                        "policy": "UPDATE_RESURRECTS",
+                        "explanation": "UPDATE vs DELETE resolved via UPDATE_RESURRECTS tombstone policy.",
+                    })
+                    continue
+
+            # ---------------------------------------------------------------
+            # Cell-level UPDATE vs UPDATE
+            # ---------------------------------------------------------------
             policy_name = (
                 policies.get(conflict.table, {}).get(conflict.column, "REJECT")
             )

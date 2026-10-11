@@ -1,7 +1,7 @@
 # SemanticSync — Requirements-to-Test Traceability Matrix
 
-**Version:** 2.1 (Phase 1 Follow-Up)  
-**Status:** Verification Baseline — 82 tests passing
+**Version:** 3.0 (Phase 2 Full Row-Mutation Model)  
+**Status:** Verification Baseline — 92 tests passing
 
 ---
 
@@ -39,8 +39,10 @@ This matrix links all major functional requirements and scientific guarantees to
 | **REQ-AUD-08** | AVG algebraic idempotency: avg(x,x)=x; sync-level non-idempotency under stale base | `engine/semantic_resolver.py` | `test_audit_correctness.py::test_avg_algebraic_idempotency` | ✅ Verified Passing |
 | **REQ-AUD-09** | APPEND multi-operation per replica, duplicate delivery idempotency | `engine/crdt_sync.py` | `test_audit_correctness.py::test_append_multi_operation_and_reordering` | ✅ Verified Passing |
 | **REQ-AUD-10** | Write-back HLC strictly dominates both predecessor timestamps | `engine/crdt_sync.py`, `engine/conflict_detector.py` | `test_audit_correctness.py::test_hlc_write_back_causal_dominance` | ✅ Verified Passing |
-| **REQ-EXT-01** | INSERT vs. INSERT collision detection | `engine/conflict_detector.py` | `Phase 2 planned` (`test_mutation_conflicts.py`) | 📋 Planned |
-| **REQ-EXT-02** | UPDATE vs. DELETE tombstone resolution | `engine/conflict_detector.py` | `Phase 2 planned` (`test_mutation_conflicts.py`) | 📋 Planned |
+| **REQ-EXT-01** | INSERT vs. INSERT PK & UNIQUE collision detection, duplicate delivery | `engine/conflict_detector.py`, `engine/crdt_sync.py` | `test_mutation_conflicts.py::TestInsertVsInsert` (3 test cases) | ✅ Verified Passing |
+| **REQ-EXT-02** | UPDATE vs. DELETE tombstone resolution & policies | `engine/conflict_detector.py`, `engine/crdt_sync.py` | `test_mutation_conflicts.py::TestUpdateVsDelete` (3 test cases) | ✅ Verified Passing |
+| **REQ-EXT-02B**| DELETE vs. DELETE idempotent convergence across 2 and 3 replicas | `engine/conflict_detector.py`, `engine/crdt_sync.py` | `test_mutation_conflicts.py::TestDeleteVsDelete` (2 test cases) | ✅ Verified Passing |
+| **REQ-EXT-02C**| Repeat sync idempotency and conflict audit persistence | `engine/crdt_sync.py`, `engine/merge_manager.py` | `test_mutation_conflicts.py::TestDeliveryIdempotencyAndRecovery` (2 test cases) | ✅ Verified Passing |
 | **REQ-EXT-03** | `BOUNDED_SUM` underflow invariant flag | `engine/semantic_resolver.py` | `Phase 3 planned` (`test_bounded_operations.py`)| 📋 Planned |
 | **REQ-EXT-04** | Multi-replica ($N \ge 3$) sync convergence | `engine/crdt_sync.py` | `Phase 3 planned` (`test_n_replica_sync.py`) | 📋 Planned |
 | **REQ-EXT-05** | Scaled stress benchmark ($N=1000$) | `workloads/` | `Phase 4 planned` (`test_stress_benchmark.py`) | 📋 Planned |

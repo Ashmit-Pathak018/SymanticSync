@@ -215,7 +215,25 @@ Detect all concurrent divergences between two replicas.
 }
 ```
 
-**Response:** `200 OK` — list of conflict records
+**Response:** `200 OK` — list of conflict records:
+```json
+[
+  {
+    "conflict_id": "uuid4",
+    "db_id": "db_inventory",
+    "table": "products",
+    "row_id": 1,
+    "column": "quantity",
+    "conflict_type": "UPDATE_UPDATE",
+    "base_value": 100,
+    "value_a": 115,
+    "value_b": 120,
+    "replica_a_id": "inventory_device_a",
+    "replica_b_id": "inventory_device_b",
+    "status": "pending"
+  }
+]
+```
 
 ---
 
@@ -287,9 +305,12 @@ Execute the full synchronization pipeline.
 {
   "db_id": "db_inventory",
   "replica_a_id": "inventory_device_a",
-  "replica_b_id": "inventory_device_b"
+  "replica_b_id": "inventory_device_b",
+  "tombstone_policy": "FLAG_FOR_REVIEW"
 }
 ```
+
+`tombstone_policy` (optional): `"FLAG_FOR_REVIEW"` (default) | `"DELETE_WINS"` | `"UPDATE_RESURRECTS"`
 
 **Response:** `200 OK`
 ```json

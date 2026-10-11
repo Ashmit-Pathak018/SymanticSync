@@ -94,11 +94,17 @@ CREATE TABLE IF NOT EXISTS _ss_change_log (
     old_value    TEXT,
     new_value    TEXT,
     ts_pt        REAL NOT NULL,
-    ts_l         INTEGER NOT NULL,
+    ts_l         INTEGER NOT NULL DEFAULT 0,
     replica_id   TEXT NOT NULL,
-    applied_at   TEXT NOT NULL
+    applied_at   TEXT NOT NULL,
+    op_type      TEXT NOT NULL DEFAULT 'UPDATE'
 );
 ```
+
+### Operation Semantics:
+- **`INSERT`:** `old_value` is `NULL`, `new_value` records row data JSON.
+- **`UPDATE`:** `old_value` and `new_value` record divergence.
+- **`DELETE`:** `new_value` is `NULL`, acts as an explicit persistent tombstone.
 
 ### Log Lifecycle & Pruning Constraints (Phase 6)
 - **Current Behavior:** Log entries accumulate indefinitely for each tracked write.

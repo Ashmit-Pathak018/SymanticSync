@@ -67,6 +67,7 @@ def detect_conflicts(body: ConflictDetectRequest) -> list[dict[str, Any]]:
             "table": c.table,
             "row_id": c.row_id,
             "column": c.column,
+            "conflict_type": getattr(c, "conflict_type", "UPDATE_UPDATE"),
             "base_value": c.base_value,
             "value_a": c.replica_a_value,
             "value_b": c.replica_b_value,
@@ -74,7 +75,8 @@ def detect_conflicts(body: ConflictDetectRequest) -> list[dict[str, Any]]:
             "replica_b_id": c.replica_b_id,
             "replica_a_ts": c.replica_a_ts,
             "replica_b_ts": c.replica_b_ts,
-            "status": "pending",
+            "status": getattr(c, "status", "pending"),
+            "explanation": getattr(c, "explanation", None),
             "detected_at": c.detected_at,
             "policy": app_state.get_policy(body.db_id, c.table, c.column) or "REJECT",
         }
@@ -140,6 +142,10 @@ def resolve_conflict(body: ConflictResolveRequest) -> dict[str, Any]:
 
     # Write-back to replicas if resolved
     if status == "resolved" and resolved_value is not None:
+        table_name = record["table"]
+        col_name = record["column"]
+        row_id = record["row_id"]
+
         for rep_key in ("replica_a_id", "replica_b_id"):
             rep_id = record.get(rep_key)
             if rep_id:
@@ -148,10 +154,27 @@ def resolve_conflict(body: ConflictResolveRequest) -> dict[str, Any]:
                     import sqlite3
                     try:
                         with sqlite3.connect(rep_path) as conn:
-                            conn.execute(
-                                f'UPDATE "{record["table"]}" SET "{record["column"]}" = ? WHERE id = ?',
-                                (resolved_value, record["row_id"]),
-                            )
+                            # Dynamic PK detection
+                            pragma = conn.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+                            pk_cols = [r[1] for r in pragma if r[5] == 1]
+                            pk_col = pk_cols[0] if pk_cols else "id"
+
+                            if col_name == "*":
+                                # Row-level resolved payload (dict)
+                                if isinstance(resolved_value, dict):
+                                    # Update or Insert
+                                    cols = [c for c in resolved_value.keys()]
+                                    set_clause = ", ".join(f'"{c}" = ?' for c in cols if c != pk_col)
+                                    vals = [resolved_value[c] for c in cols if c != pk_col] + [row_id]
+                                    conn.execute(
+                                        f'UPDATE "{table_name}" SET {set_clause} WHERE "{pk_col}" = ?',
+                                        vals,
+                                    )
+                            else:
+                                conn.execute(
+                                    f'UPDATE "{table_name}" SET "{col_name}" = ? WHERE "{pk_col}" = ?',
+                                    (resolved_value, row_id),
+                                )
                             conn.commit()
                     except Exception:
                         pass

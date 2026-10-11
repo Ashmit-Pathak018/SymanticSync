@@ -92,5 +92,44 @@ New test `test_append_multi_operation_and_reordering` verifies:
 | Python | 3.14.3 | 3.14.3 |
 | Duration | ~1.6 s | ~1.7 s |
 
-**Phase 1 follow-up is complete. Awaiting Phase 2 approval.**
+**Phase 1 follow-up is complete. Phase 2 approved and implemented.**
+
+---
+
+## 4. Phase 2 Audit Report — Full Row-Mutation Conflict Model (October 2026)
+
+### 4.1 Implementation Scope Verified
+
+Phase 2 extended SemanticSync from single-PK, cell-level UPDATE vs UPDATE to a complete row-mutation conflict model:
+
+1. **INSERT vs. INSERT:**
+   - **Primary Key Collision:** Independent insertions with divergent payloads are detected and flagged (`status = 'flagged'`, `conflict_type = 'INSERT_INSERT'`). Full row payloads from both replicas are preserved. No silent overwrites or auto-rekeying.
+   - **Idempotent Delivery:** Identical row payloads delivered to both replicas converge with zero conflicts.
+   - **Secondary UNIQUE Collisions:** Independent insertions with different PKs but colliding values on a column governed by a UNIQUE index/constraint are detected and flagged (`conflict_type = 'UNIQUE_COLLISION'`).
+2. **UPDATE vs. DELETE & Tombstone Semantics:**
+   - Deletions are logged with explicit `op_type = 'DELETE'` and recorded in `_ss_change_log`.
+   - Concurrent UPDATE vs DELETE is flagged by default (`FLAG_FOR_REVIEW`) with both the updated row payload and tombstone preserved in `ConflictInfo`.
+   - Configurable tombstone policies: `DELETE_WINS` (row deleted across replicas) and `UPDATE_RESURRECTS` (updated payload resurrected across replicas) implemented and verified.
+3. **DELETE vs. DELETE:**
+   - Concurrent deletions across 2 and 3 replicas converge idempotently with zero spurious conflicts.
+4. **Delivery Idempotency & Conflict Recovery:**
+   - Repeated synchronization after resolution does not re-apply or duplicate changes.
+   - All conflicts are durably persisted in `MergeManager` with full structural evidence.
+
+### 4.2 Test Metrics
+
+| Metric | Phase 1 Baseline | Phase 1 Follow-Up | Phase 2 Complete |
+|---|---|---|---|
+| Total tests | 79 | 82 | **92** |
+| Passing | 79 | 82 | **92** |
+| Failing | 0 | 0 | **0** |
+| New mutation tests | — | — | 10 (`test_mutation_conflicts.py`) |
+| Duration | ~1.6 s | ~1.7 s | ~1.2 s |
+
+### 4.3 Remaining Boundaries for Future Phases
+- **BOUNDED_SUM & Invariant Policies:** Phase 3.
+- **N-Replica Mesh Synchronization ($N \ge 3$ arbitrary topologies):** Phase 3.
+- **Foreign-Key Orphan Quarantine Table (`_ss_quarantine`):** Phase 5.
+- **Change Log Compaction & Causal Stability Pruning:** Phase 6.
+
 

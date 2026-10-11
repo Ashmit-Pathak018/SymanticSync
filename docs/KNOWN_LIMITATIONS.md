@@ -12,10 +12,13 @@
 - Tables with composite primary keys (multi-column PKs) are skipped during conflict discovery.
 - **Remediation Plan:** Phase 2 extension will support tuple-based row addressing `tuple(pk_cols)`.
 
-### 2. Update Divergence Focus
-- The current implementation detects conflicts when both replicas perform divergent `UPDATE` operations on an existing row ($S_A[k][c] \neq S_{\text{base}}[k][c] \land S_B[k][c] \neq S_{\text{base}}[k][c]$).
-- Missing rows (resulting from un-synchronized `INSERT` or `DELETE`) are intentionally skipped by the current detector loop (`conflict_detector.py` lines 120–122).
-- **Remediation Plan:** Full row-mutation handling (`INSERT vs INSERT`, `UPDATE vs DELETE`, `DELETE vs DELETE`) is specified in `CONFLICT_MODEL.md` for Phase 2.
+### 2. Full Row Mutation Conflict Model (Implemented in Phase 2)
+- Prior to Phase 2, `ConflictDetector` skipped missing rows and evaluated only `UPDATE vs UPDATE`.
+- **Status:** **Implemented & Verified.** The detector now handles the complete relational mutation lifecycle:
+  - `INSERT vs INSERT`: PK collisions with divergent payloads are detected and flagged; identical duplicate insertions converge idempotently.
+  - `INSERT vs INSERT` (UNIQUE constraint): Secondary unique index collisions across differing PKs are detected and flagged.
+  - `UPDATE vs DELETE`: Concurrent update and delete are flagged by default; configurable via `DELETE_WINS` and `UPDATE_RESURRECTS` tombstone policies.
+  - `DELETE vs DELETE`: Idempotent convergence without conflict across 2 and 3 replicas.
 
 ### 3. Additive Delta Independence Assumption
 - The `SUM` operator formula ($V_{\text{base}} + \Delta_A + \Delta_B$) assumes both replicas performed independent delta modifications relative to the ancestor base snapshot.

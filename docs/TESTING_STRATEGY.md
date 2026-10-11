@@ -46,17 +46,25 @@ Tests that validate workload setup and ground truth scenarios.
 |---|---|---|
 | `test_benchmark.py` | 3 | Inventory, Notes, Health workloads: setup, ground truth count, SCR |
 
-### 4. API Integration Tests
+### 5. Core Correctness & Algebraic Properties Tests
 
-Tests against the running FastAPI app using `starlette.TestClient`.
+Adversarial audit tests for policy mathematical laws, HLC monotonicity, and 3-replica pairwise convergence.
 
-**Location:** `backend/tests/test_api.py`
+**Location:** `backend/tests/test_audit_correctness.py`
 
 | File | Tests | Coverage |
 |---|---|---|
-| `test_api.py` | 6 | Health check, seed, database registration, schema, policy, query |
+| `test_audit_correctness.py` | 26 | Commutativity, non-associativity proofs, idempotency, HLC ordering |
 
----
+### 6. Full Row-Mutation Conflict Tests (Phase 2)
+
+Tests for full lifecycle row operations: INSERT vs INSERT (PK & UNIQUE collisions), UPDATE vs DELETE tombstones, DELETE vs DELETE idempotency, causality, and repeat-delivery.
+
+**Location:** `backend/tests/test_mutation_conflicts.py`
+
+| File | Tests | Coverage |
+|---|---|---|
+| `test_mutation_conflicts.py` | 15+ | INSERT collisions, UPDATE/DELETE, causal ordering, tombstones |
 
 ## Current Test Count: 56 passed, 0 failed
 
