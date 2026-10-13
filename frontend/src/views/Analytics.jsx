@@ -415,6 +415,37 @@ export function Analytics() {
                   <p className="text-[11px] text-text-secondary mt-1">Sub-millisecond policy execution</p>
                 </Card>
               </div>
+
+              {/* Uncollected Metrics in Domain Mode */}
+              <div className="bg-gray-50/80 border border-border rounded-xl p-4 text-xs space-y-3">
+                <div className="flex items-center gap-2 font-semibold text-text-primary">
+                  <Clock className="w-4 h-4 text-text-muted" />
+                  <span>Domain Workload Evaluation Scope (Explicit N/A Measurements)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+                  <div className="p-3 bg-white border border-border rounded-lg">
+                    <div className="font-semibold text-text-muted text-[10px] uppercase">Valid Resolution Accuracy (VRA)</div>
+                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
+                    <div className="text-[10px] text-text-muted font-sans leading-tight">
+                      Domain workloads evaluate ground-truth semantic correctness (SCR) on deterministic edit pairs rather than synthetic bounded range checks.
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white border border-border rounded-lg">
+                    <div className="font-semibold text-text-muted text-[10px] uppercase">Latency Distribution (p50 / p95 / p99)</div>
+                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
+                    <div className="text-[10px] text-text-muted font-sans leading-tight">
+                      Percentile latency distributions are measured under high-throughput batch loads in the Parametric Stress Harness tab.
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white border border-border rounded-lg">
+                    <div className="font-semibold text-text-muted text-[10px] uppercase">Conflict Density Distribution</div>
+                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
+                    <div className="text-[10px] text-text-muted font-sans leading-tight">
+                      Domain scenarios evaluate fixed 1:1 concurrent edit pairs rather than variable stochastic density distributions.
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <Card className="text-center py-16">
