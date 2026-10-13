@@ -1,220 +1,159 @@
 # SemanticSync — Policy Specification
 
-**Version:** 1.0
+**Version:** 2.1 (Phase 1 Follow-Up Corrected)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## Overview
+## 1. Overview & Policy Classification
 
-A **Semantic Policy** is a declarative annotation assigned to a specific `(table, column)` pair in a registered SQLite database. It instructs the SemanticSync engine how to resolve a concurrent conflict on that field.
+A **Semantic Policy** is a declarative annotation configured for a specific `(table, column)` pair in a registered SQLite database. It dictates the deterministic reconciliation logic applied when concurrent divergent mutations are detected between replicas.
 
-Policies are **registered** at the engine level (domain-agnostic) and **assigned** at the schema level by the developer.
+### Formal Algebraic Classification
 
----
+A general-purpose state-based CRDT merge operator $\sqcup$ must form a join-semilattice satisfying:
+1. **Commutativity:** $x \sqcup y = y \sqcup x$
+2. **Associativity:** $(x \sqcup y) \sqcup z = x \sqcup (y \sqcup z)$
+3. **Idempotency:** $x \sqcup x = x$
 
-## Policy Registry
+In SemanticSync, policies fall into three distinct formal categories:
 
-All policies are registered in `backend/engine/policy_registry.py`. New policies can be added via `register_policy()` without modifying the resolver — they must also implement a handler in `semantic_resolver.py`.
+| Policy | Algebraic Category | Commutative? | Associative? | Idempotent? | Supported Scope |
+|---|---|---|---|---|---|
+| **`MIN` / `MAX`** | **Join-Semilattice** | ✅ Yes | ✅ Yes | ✅ Yes | Arbitrary N-way pairwise merge |
+| **`LWW`** | **Causally-Ordered Register** | ✅ (Deterministic tie-break) | ✅ Yes | ✅ Yes | Global timestamp total order |
+| **`REJECT`** | **Safety Guard / Triage** | ✅ Yes | ✅ Yes | ✅ Yes | Always yields flagged state |
+| **`SUM` (Delta)**| **Delta Operation (Conditional)** | ✅ Yes | ⚠️ Context-dependent | ❌ No (double-counting risk) | Pairwise sync with ancestor base |
+| **`APPEND`** | **Set/List Union (Conditional)** | ✅ (Sorted order) | ⚠️ Sensitive to delimiters | ⚠️ Idempotent on raw elements | Pairwise sync with ancestor base |
+| **`AVG`** | **Non-Associative (Restricted)** | ✅ Yes | ❌ **No** | ✅ **Yes†** | Controlled pairwise sync only |
 
----
-
-## Policy Definitions
-
-### `SUM` — Additive Delta Merge
-
-**Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
-
-**Merge Formula:**
-```
-resolved = value_a + value_b - base_value
-```
-
-This is equivalent to: `base + Δa + Δb` where `Δa = value_a - base` and `Δb = value_b - base`.
-
-**Properties:**
-- ✅ Commutative: `resolve(a, b) == resolve(b, a)`
-- ✅ Deterministic: no randomness
-- ✅ Converges to the sum of all independent increments
-
-**Use Cases:**
-- Inventory quantity updates
-- Counter increments (edit_count, views, likes)
-- Financial balance adjustments
-
-**Example:**
-```
-base=100, replica_a=115 (+15), replica_b=120 (+20)
-→ resolved = 115 + 120 - 100 = 135  ✓
-```
+> **†** AVG is algebraically idempotent: $\text{avg}(x, x) = x$ for any scalar $x$. However, _sync-level_ idempotency requires the base snapshot to be refreshed before each application. Repeating the formula on a stale base causes progressive drift (the observed value converges toward the extremes of the distribution with each re-application). Do not conflate operation-level algebraic idempotency with the synchronization property of "applying the same change twice yields the same system state."
 
 ---
 
-### `AVG` — Arithmetic Mean
+## 2. Detailed Policy Specifications
 
-**Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
+### 2.1 `SUM` — Additive Delta Reconciliation
 
-**Merge Formula:**
-```
-resolved = (value_a + value_b) / 2.0
-```
-
-**Properties:**
-- ✅ Commutative
-- ✅ Returns `float` always
-- ⚠️ Does not account for base_value (pure mean of the two conflicting values)
-
-**Use Cases:**
-- Sensor readings (heart_rate, temperature)
-- Ratings and scores
-- Dosage values where both readings are valid
-
-**Example:**
-```
-replica_a=75, replica_b=69
-→ resolved = (75 + 69) / 2.0 = 72.0  ✓
-```
+- **Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
+- **Required Inputs:**
+  - Common ancestor base value: $V_{\text{base}}$
+  - Replica A value: $V_A$
+  - Replica B value: $V_B$
+- **Mathematical Formula:**
+  $$\Delta_A = V_A - V_{\text{base}}, \quad \Delta_B = V_B - V_{\text{base}}$$
+  $$V_{\text{resolved}} = V_{\text{base}} + \Delta_A + \Delta_B = V_A + V_B - V_{\text{base}}$$
+- **Properties:**
+  - **Commutativity:** $V_A + V_B - V_{\text{base}} = V_B + V_A - V_{\text{base}}$ (Verified).
+  - **Type Preservation:** If $V_{\text{base}}, V_A, V_B \in \mathbb{Z}$, the result is cast to `int`.
+- **Known Limitations & Double-Counting Hazards:**
+  - `SUM` is **not idempotent**. Applying the formula multiple times without updating the base snapshot will repeatedly add deltas.
+  - In N-way topologies ($A \leftrightarrow B \leftrightarrow C$), delta tracking requires explicit vector logs or PN-Counters rather than scalar 3-way evaluation to avoid cyclic amplification.
+  - Unbounded subtractions can violate domain invariants (e.g., negative inventory balances).
 
 ---
 
-### `APPEND` — Deterministic Text Concatenation
+### 2.2 `AVG` — Arithmetic Mean
 
-**Compatible Types:** `TEXT`
-
-**Merge Algorithm:**
-1. If `value_a == value_b` → return either (no real conflict)
-2. If only one side changed from base → return the changed value
-3. If both changed → concatenate in `replica_id` lexicographic order: `f"{first}; {second}"`
-
-**Properties:**
-- ✅ Commutative (ordering determined by replica_id sort, not call order)
-- ✅ Preserves both contributions
-- ✅ Idempotent when values are identical
-
-**Use Cases:**
-- Clinical notes, meeting notes, log entries
-- Collaborative document bodies
-- Tag lists, comment threads
-
-**Example:**
-```
-base="Initial note"
-replica_a="Initial note. Alice added: action items."
-replica_b="Initial note. Bob added: risks."
-→ resolved = "Initial note. Alice added: action items.; Initial note. Bob added: risks."
-```
+- **Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
+- **Required Inputs:**
+  - Replica A value: $V_A$
+  - Replica B value: $V_B$
+- **Mathematical Formula:**
+  $$V_{\text{resolved}} = \frac{V_A + V_B}{2.0}$$
+- **Properties:**
+  - **Commutativity:** $\frac{V_A + V_B}{2} = \frac{V_B + V_A}{2}$ (Verified).
+  - **Algebraic Idempotency:** $\text{avg}(x, x) = x$ — applying the operator to two identical values returns the same value.
+  - Always returns `float`.
+- **Formal Non-Associativity Warning:**
+  - **`AVG` is NOT associative:**
+    $$\text{avg}(\text{avg}(a, b), c) = \frac{\frac{a+b}{2} + c}{2} = \frac{a}{4} + \frac{b}{4} + \frac{c}{2} \neq \text{avg}(a, \text{avg}(b, c))$$
+  - **Sync-Level Idempotency Caveat:** Even though $\text{avg}(x, x) = x$ algebraically, repeated application of the formula against a stale base snapshot (i.e., without refreshing $V_{\text{base}}$ after each sync) causes progressive drift. This is a synchronization protocol property, not an operator property.
+  - **Operational Constraint:** `AVG` is strictly supported for pairwise reconciliation where both readings are treated as concurrent independent sensor observations. For true N-replica averaging, the underlying state must track a tuple $\langle \text{sum}, \text{count} \rangle$.
 
 ---
 
-### `LWW` — Last-Write-Wins
+### 2.3 `APPEND` — Deterministic Text Concatenation
 
-**Compatible Types:** Any (`*`)
-
-**Merge Algorithm:**
-1. Compare `timestamp_a` vs `timestamp_b` (Hybrid Logical Clock floats)
-2. Higher timestamp wins
-3. **Tie-break:** lexicographically higher `replica_id` wins (deterministic)
-
-**Properties:**
-- ✅ Deterministic with tie-breaking
-- ❌ Not commutative in general (winner depends on timestamps)
-- ⚠️ One value is discarded — acceptable when recency governs meaning
-
-**Use Cases:**
-- Profile fields (name, avatar_url)
-- Status fields (order_status, account_status)
-- Soft-overwrite fields where latest is always correct
-
----
-
-### `REJECT` — Manual Review Required
-
-**Compatible Types:** Any (`*`)
-
-**Behavior:**
-- Never applies any automatic merge
-- Returns `ResolutionResult { status="flagged", resolved_value=None }`
-- Conflict is stored in `MergeManager` for human review
-- No replica value is mutated
-
-**Properties:**
-- ✅ Safe — zero data mutation
-- ✅ Always deterministic (always flags)
-- ✅ Preserves both values for manual inspection
-
-**Use Cases:**
-- Critical immutable keys (`sku`, `patient_id`, `blood_type`)
-- Fields where any automatic resolution is unsafe
-- Regulatory compliance requirements
+- **Compatible Types:** `TEXT`
+- **Required Inputs:**
+  - $V_{\text{base}}, V_A, V_B$, and replica identifiers $\text{id}_A, \text{id}_B$
+- **Algorithm:**
+  1. If $V_A = V_B$, return $V_A$.
+  2. If $V_A = V_{\text{base}}$ and $V_B \neq V_{\text{base}}$, return $V_B$ (one-sided change).
+  3. If $V_B = V_{\text{base}}$ and $V_A \neq V_{\text{base}}$, return $V_A$ (one-sided change).
+  4. If both diverged:
+     - Sort replica IDs lexicographically to guarantee commutativity:
+       $$\text{order} = (\text{id}_A, \text{id}_B) \text{ if } \text{id}_A < \text{id}_B \text{ else } (\text{id}_B, \text{id}_A)$$
+     - Format: `"{first_value}; {second_value}"`
+- **Properties:**
+  - **Commutativity:** Guaranteed by sorting on replica identifier.
+  - **Idempotency:** When both replicas submit identical text, duplicates are not generated.
+- **Limitations:** Delimiter concatenation does not perform character-level operational transformation or collaborative rich-text formatting (use CRDT text sequences like RGA/Fugue for inline document editing).
 
 ---
 
-### `MIN` — Minimum Bound
+### 2.4 `LWW` — Last-Write-Wins Register
 
-**Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
-
-```
-resolved = min(value_a, value_b)
-```
-
-**Use Cases:** Pricing floors, resource limits, SLA thresholds.
-
----
-
-### `MAX` — Maximum Bound
-
-**Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
-
-```
-resolved = max(value_a, value_b)
-```
-
-**Use Cases:** High-water marks, capability scores, inventory ceilings.
+- **Compatible Types:** Any (`INTEGER`, `REAL`, `TEXT`, `BLOB`, `NUMERIC`)
+- **Required Inputs:**
+  - $V_A, V_B$, HLC timestamps $\tau_A, \tau_B$, and replica identifiers $\text{id}_A, \text{id}_B$
+- **Algorithm:**
+  1. If $\tau_A > \tau_B$, select $V_A$.
+  2. If $\tau_B > \tau_A$, select $V_B$.
+  3. If $\tau_A = \tau_B$ (exact tie), select the value corresponding to $\max(\text{id}_A, \text{id}_B)$ lexicographically.
+- **Properties:**
+  - **Total Order:** Forms a strict join-semilattice over $\langle \tau, \text{id}, V \rangle$.
+  - **Commutative, Associative, Idempotent.**
+- **Known Failure Mode:** Discards the earlier mutation entirely, resulting in lost concurrent contributions.
 
 ---
 
-## Type Compatibility Matrix
+### 2.5 `REJECT` — Safety Guard / Manual Review
+
+- **Compatible Types:** Any (`*`)
+- **Behavior:**
+  - Always returns:
+    $$\text{ResolutionResult}(\text{status} = \text{"flagged"}, \text{resolved\_value} = \text{None})$$
+  - The conflict is durably persisted in `MergeManager` and `AppState`.
+  - **Replicas are NOT mutated.** No write-back occurs until manual intervention.
+- **Properties:**
+  - Trivially commutative and deterministic.
+  - Guarantees safety for critical keys, biometrics, or invariant fields where automated resolution is intolerable.
+
+---
+
+### 2.6 `MIN` and `MAX` — Bounded Lattice Extrema
+
+- **Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
+- **Formulas:**
+  $$\text{MIN}(V_A, V_B) = \min(V_A, V_B), \quad \text{MAX}(V_A, V_B) = \max(V_A, V_B)$$
+- **Properties:**
+  - Proven join-semilattices (totally ordered numeric sets).
+  - Fully commutative, associative, and idempotent.
+
+---
+
+### 2.7 `BOUNDED_SUM` (Phase 3 Implementation)
+
+- **Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
+- **Configuration:** `BOUNDED_SUM[min=<finite number>,max=<finite number>]`; both bounds are inclusive and `min <= max`.
+- **Tracked semantics:** Each accepted tracked update records its signed delta and bounds with a stable operation ID. Sync deduplicates by ID and applies a delta only when the current value and result remain within bounds.
+- **Unsafe merge behavior:** The resolver flags a combined out-of-bound result with an explanation. The synchronizer does not clamp or receipt an unsafe received delta; it stays pending in the source log and is returned to the caller as rejected/pending.
+- **Evidence boundary:** Tests cover selected N=3/5 schedules, duplicates, reversed delivery, and restart. This is not a general convergence guarantee. Direct SQL bypasses tracked bound validation and operation identity.
+
+---
+
+## 3. Type Compatibility & Validation Rules
 
 | Policy | INTEGER | REAL | NUMERIC | TEXT | BLOB |
-|--------|---------|------|---------|------|------|
-| SUM    | ✅ | ✅ | ✅ | ❌ | ❌ |
-| AVG    | ✅ | ✅ | ✅ | ❌ | ❌ |
-| APPEND | ❌ | ❌ | ❌ | ✅ | ❌ |
-| LWW    | ✅ | ✅ | ✅ | ✅ | ✅ |
-| REJECT | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MIN    | ✅ | ✅ | ✅ | ❌ | ❌ |
-| MAX    | ✅ | ✅ | ✅ | ❌ | ❌ |
+|---|---|---|---|---|---|
+| **SUM** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
+| **AVG** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
+| **APPEND** | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` |
+| **LWW** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible |
+| **REJECT** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible |
+| **MIN / MAX** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
+| **BOUNDED_SUM** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
 
-Incompatible assignments return `HTTP 422` with `error_code: "TYPE_INCOMPATIBLE"`.
-
----
-
-## Validation Rules
-
-```python
-# Valid:
-PolicyValidator.validate("SUM", "INTEGER")    → valid=True
-PolicyValidator.validate("APPEND", "TEXT")    → valid=True
-PolicyValidator.validate("REJECT", "BLOB")    → valid=True  # wildcard
-
-# Invalid:
-PolicyValidator.validate("SUM", "TEXT")       → valid=False, error_code="TYPE_INCOMPATIBLE"
-PolicyValidator.validate("AVG", "TEXT")       → valid=False
-PolicyValidator.validate("MAGIC", "INTEGER")  → valid=False, error_code="UNKNOWN_POLICY"
-```
-
----
-
-## Extending the Policy Registry
-
-```python
-from backend.engine.policy_registry import register_policy
-
-register_policy(
-    name="MEDIAN",
-    description="Statistical median of concurrent numeric values.",
-    compatible_types={"INTEGER", "REAL", "NUMERIC"},
-    symmetric=True,
-)
-```
-
-Then add the corresponding handler in `SemanticResolver._HANDLERS`.
+Incompatible configurations are caught by `PolicyValidator` and return `HTTP 422 Unprocessable Entity` with a descriptive message before runtime synchronization.

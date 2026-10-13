@@ -1,168 +1,70 @@
 # SemanticSync — Architecture Decision Records (ADRs)
 
-**Version:** 1.0
+**Version:** 2.0 (Reconciled)  
+**Status:** Active Record
 
 ---
 
-## ADR-001: SQLite as the Conflict Domain
+## ADR-001: SQLite and Standard SQL as Storage Foundation
 
-**Status:** Accepted  
-**Date:** September 2026
-
-### Context
-The conflict resolution problem exists in any distributed database. We needed to choose a concrete target for v1.
-
-### Decision
-Target **SQLite** exclusively in v1.
-
-### Rationale
-- SQLite is the world's most widely deployed database — billions of devices
-- SQLite has a strong and stable PRAGMA introspection API (`table_info`, `sqlite_master`)
-- Local-first applications (Obsidian, Linear, Notion desktop, etc.) are predominantly SQLite-backed
-- Standard Python `sqlite3` module requires zero additional dependencies
-- SQLite's type affinity system is well-defined and maps cleanly to our 5 normalized types
-
-### Consequences
-- Incompatible with PostgreSQL, MySQL, or cloud databases in v1
-- Row-level addressing only (no JSONB or nested document support)
+- **Status:** Accepted
+- **Context:** Distributed data synchronization can be tackled at the file level (Git), the document level (JSON/CouchDB), or the relational level (SQLite/Postgres).
+- **Decision:** Target embedded SQLite databases using standard SQL.
+- **Rationale:** SQLite is ubiquitous on edge and mobile devices. Rather than inventing a custom storage engine, developers should retain existing SQLite tools and schemas.
+- **Consequences:** Limits v1 scope to single-file relational replicas; non-relational or multi-node server clusters are excluded.
 
 ---
 
-## ADR-002: Semantic Policy Layer Above CRDT Convergence
+## ADR-002: Decoupling Convergence Mechanics from Semantic Resolution
 
-**Status:** Accepted  
-**Date:** September 2026
-
-### Context
-Generic CRDT approaches (LWW registers, G-counters, etc.) ensure convergence but not semantic correctness. We could have implemented either:
-1. Extend CRDT data types with semantic behavior built-in
-2. Add a separate semantic resolution layer that runs on top of generic CRDTs
-
-### Decision
-**Option 2: Separate semantic policy layer.** CRDTSyncEngine handles convergence; SemanticResolver handles correctness.
-
-### Rationale
-- **Decoupling:** CRDTs can evolve independently of business semantics
-- **Domain agnosticism:** The engine layer must be free of domain logic
-- **Testability:** Each layer can be unit-tested independently
-- **Flexibility:** Policies can be changed at runtime; the CRDT mechanism does not change
-
-### Consequences
-- Slightly more complex architecture
-- Must ensure the resolution layer is called after CRDT sync, not instead of it
+- **Status:** Accepted
+- **Context:** Generic CRDTs enforce state convergence but lack domain awareness, often causing silent data loss on relational attributes.
+- **Decision:** Separate synchronization into two layers:
+  1. **Causality & Convergence Layer:** HLC logical timestamps and change logs establish event ordering.
+  2. **Semantic Resolution Layer:** Declarative schema policies (`SUM`, `AVG`, `APPEND`, `REJECT`) decide how divergent values are merged.
+- **Rationale:** Allows domain-independent policy execution while preserving convergence guarantees under specified assumptions.
 
 ---
 
-## ADR-003: FastAPI over Flask/Django
+## ADR-003: Pre-Runtime Static Type Validation
 
-**Status:** Accepted  
-**Date:** September 2026
-
-### Context
-Python web framework selection for the REST API.
-
-### Decision
-**FastAPI** with Pydantic v2 models.
-
-### Rationale
-- Automatic OpenAPI/Swagger documentation out of the box
-- Pydantic v2 provides fast, type-safe request validation
-- Async-ready (`async def`) for future non-blocking replica I/O
-- Much faster than Django for this lightweight stateless API use case
-- Better developer ergonomics for a research project than Flask (no hand-written validation)
+- **Status:** Accepted
+- **Context:** Misconfigured policies (e.g. arithmetic `AVG` assigned to a `TEXT` column) can lead to runtime crashes or silent data corruption during sync.
+- **Decision:** Enforce fail-fast static validation via `PolicyValidator`. Any incompatible assignment is rejected with `HTTP 422 Unprocessable Entity` before synchronization is permitted.
+- **Rationale:** Upholds Rule 3 of `agent.md`.
 
 ---
 
-## ADR-004: In-Memory + JSON Persistence (No ORM)
+## ADR-004: Safe Default for Unresolvable Conflicts (`REJECT`)
 
-**Status:** Accepted  
-**Date:** September 2026
-
-### Context
-We needed to persist API-level state (registered databases, policies, conflicts). Options:
-1. SQLite as a metadata store (with SQLAlchemy or raw SQL)
-2. In-memory dict + JSON file persistence
-
-### Decision
-**Option 2: `AppState` class with JSON persistence** at `data/registry.json`.
-
-### Rationale
-- Zero additional dependencies (no SQLAlchemy, no alembic)
-- No risk of interfering with the target SQLite databases under test
-- Simple to reason about for a research project
-- Avoids recursive meta-problem: using SQLite to manage SQLite sync metadata
-- JSON is human-readable and debuggable
-
-### Consequences
-- Not suitable for concurrent multi-process access
-- Not suitable for >10k conflicts in memory (v1 scope is fine)
-- `write_text()` used instead of `os.replace()` to avoid Windows `PermissionError`
+- **Status:** Accepted
+- **Context:** When automated reconciliation cannot be mathematically or safely justified (e.g., conflicting biometric data or primary keys), automated overwrite risks data corruption.
+- **Decision:** Default to `REJECT` (status = `flagged`). The conflicting state is persisted in `MergeManager` and neither replica is mutated until manual user review.
+- **Rationale:** Safety over aggressive automation.
 
 ---
 
-## ADR-005: Hybrid Logical Clock over Lamport Clocks
+## ADR-005: Multi-Table Foreign Key Integrity via Orphan Quarantine (Phase 5)
 
-**Status:** Accepted  
-**Date:** September 2026
-
-### Context
-Replica change ordering requires a causally consistent clock. Options:
-1. Lamport Clocks (pure logical)
-2. Vector Clocks (per-node)
-3. Hybrid Logical Clocks (HLC)
-
-### Decision
-**Hybrid Logical Clocks (HLC).**
-
-### Rationale
-- HLCs encode both physical time and logical ordering
-- They remain close to wall-clock time (useful for debugging timestamps)
-- They are compact — a (pt, l) tuple per node
-- Standard choice in modern distributed databases (CockroachDB, YugabyteDB)
-- LWW policy benefits from physical-time proximity for human comprehension
-
-### Consequences
-- Requires all nodes to have roughly synchronized system clocks (acceptable for local-first)
+- **Status:** Accepted for Phase 5 Implementation
+- **Context:** When a parent record is deleted on Replica A while a child record is inserted/updated on Replica B, applying child changes directly violates SQLite foreign key constraints.
+- **Decision:** Route orphaned child rows into a dedicated `_ss_quarantine` table with audit metadata. Do NOT automatically resurrect parent records as the default.
+- **Rationale:** Automatic resurrection can violate application invariants (e.g., resurrecting a cancelled account). Quarantine preserves data safely while keeping the primary database referentially intact.
 
 ---
 
-## ADR-006: Parameterized SQL Only
+## ADR-006: Bounded Additive Operations (`BOUNDED_SUM`) (Phase 3)
 
-**Status:** Non-negotiable  
-**Date:** September 2026
-
-### Context
-The engine must write SQL to user-supplied SQLite databases.
-
-### Decision
-**All SQL uses parameterized queries (`?` placeholders).** String interpolation in SQL is strictly prohibited.
-
-### Rationale
-- SQL injection prevention (even in local tools, best practices must be followed)
-- Consistent with Rule 5 in `agent.md`
-- SQLite's `check_same_thread=False` is used for multi-threaded FastAPI context
-
-### Consequences
-- Slightly more verbose code
-- Table and column names are still interpolated as identifiers (sanitized via allowlist from schema)
+- **Status:** Implemented for the verified Phase 3 scope; see traceability and limitations for evidence boundaries.
+- **Context:** Unbounded additive deltas in inventory or financial accounts risk underflow (e.g., stock dropping below zero).
+- **Decision:** `BOUNDED_SUM[min=...,max=...]` enforces explicit inclusive bounds on tracked signed deltas. If a combined candidate breaches either bound, flag it and keep the received operation pending; never clamp or write the out-of-bound value.
+- **Rationale:** Prevents tracked operations from materializing an out-of-bound value. Tests cover selected N=3/5 mesh schedules only; they do not establish general convergence, and direct SQL bypasses tracked validation.
 
 ---
 
-## ADR-007: Design Token System for Frontend
+## ADR-007: Causal Stability Checkpoint for Log Pruning (Phase 6)
 
-**Status:** Accepted  
-**Date:** October 2026
-
-### Context
-The SemanticSync Studio frontend needs a cohesive visual language for conflict states, resolutions, and policy types.
-
-### Decision
-**Fixed design token palette** (see `docs/DESIGN_SYSTEM.md`). No arbitrary color values in component code.
-
-### Rationale
-- Visual consistency across all views
-- Tokens map semantically to application states (Danger = conflict, Success = resolved)
-- Shared language between design and code via Tailwind `extend.colors`
-
-### Consequences
-- Frontend contributors must use token names, not hex values directly
+- **Status:** Partial implementation; Phase 6 acceptance review pending
+- **Context:** `_ss_change_log` grows monotonically over time. Pruning too early breaks replication for lagging replicas.
+- **Decision:** Prune only dependency-closed operations whose exact stable IDs are acknowledged by every currently enrolled replica and whose HLC is strictly less than $\min_{r} T_{\text{ack}}(r)$. HLC alone never proves delivery. Preserve compact identity/sequence/dependency/hash metadata. Keep missing-ACK entries.
+- **Rationale:** Exact ID evidence makes the scalar horizon a cutoff, not a substitute for causal receipt. API replicas created after compaction are copied from a current enrolled replica; the shared ancestor is unchanged. This is a safe tested implementation subset, but it does not fulfill the planned full base/checkpoint snapshot and payload-history recovery criterion. Phase 6 remains partial until that deviation is approved or completed.

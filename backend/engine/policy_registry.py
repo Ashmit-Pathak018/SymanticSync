@@ -17,6 +17,8 @@ Policies
 from __future__ import annotations
 
 from enum import Enum
+import math
+import re
 from typing import Any
 
 
@@ -28,6 +30,7 @@ class PolicyType(str, Enum):
     REJECT = "REJECT"
     MIN = "MIN"
     MAX = "MAX"
+    BOUNDED_SUM = "BOUNDED_SUM"
 
 
 # policy_name → {name, description, compatible_types, symmetric}
@@ -49,7 +52,7 @@ def register_policy(
 
 
 def get_policy(name: str) -> dict[str, Any] | None:
-    return _REGISTRY.get(name.upper())
+    return _REGISTRY.get(policy_base_name(name))
 
 
 def list_policies() -> list[dict[str, Any]]:
@@ -57,12 +60,47 @@ def list_policies() -> list[dict[str, Any]]:
 
 
 def is_registered(name: str) -> bool:
-    return name.upper() in _REGISTRY
+    return policy_base_name(name) in _REGISTRY
 
 
 def compatible_types(name: str) -> set[str]:
-    policy = _REGISTRY.get(name.upper())
+    policy = _REGISTRY.get(policy_base_name(name))
     return policy["compatible_types"] if policy else set()
+
+
+_BOUNDED_SUM_RE = re.compile(
+    r"^BOUNDED_SUM\s*\[\s*min\s*=\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*,"
+    r"\s*max\s*=\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*\]$",
+    re.IGNORECASE,
+)
+
+
+def policy_base_name(name: str) -> str:
+    """Return a registered base policy name, ignoring bounded parameters."""
+    upper = str(name).strip().upper()
+    return "BOUNDED_SUM" if upper.startswith("BOUNDED_SUM") else upper
+
+
+def parse_bounded_sum_bounds(name: str) -> tuple[int | float, int | float]:
+    """Parse explicit inclusive bounds from ``BOUNDED_SUM[min=...,max=...]``."""
+    match = _BOUNDED_SUM_RE.fullmatch(str(name).strip())
+    if not match:
+        raise ValueError("BOUNDED_SUM requires explicit bounds: BOUNDED_SUM[min=<number>,max=<number>].")
+    values: list[int | float] = []
+    for token in match.groups():
+        if "." in token:
+            value: int | float = float(token)
+            if not math.isfinite(value):
+                raise ValueError("BOUNDED_SUM bounds must be finite numbers.")
+        else:
+            # Keep integer bounds exact across the full SQLite INTEGER range;
+            # converting through binary64 loses precision above 2**53.
+            value = int(token)
+        values.append(value)
+    minimum, maximum = values
+    if minimum > maximum:
+        raise ValueError("BOUNDED_SUM minimum bound must be less than or equal to maximum bound.")
+    return minimum, maximum
 
 
 # Pre-register core policies
@@ -111,6 +149,16 @@ register_policy(
 register_policy(
     name="MAX",
     description="Deterministic upper-bound: selects maximum of replica values.",
+    compatible_types={"INTEGER", "REAL", "NUMERIC"},
+    symmetric=True,
+)
+
+register_policy(
+    name="BOUNDED_SUM",
+    description=(
+        "Add tracked signed deltas with explicit inclusive bounds using "
+        "BOUNDED_SUM[min=<number>,max=<number>]. Unsafe operations stay pending."
+    ),
     compatible_types={"INTEGER", "REAL", "NUMERIC"},
     symmetric=True,
 )

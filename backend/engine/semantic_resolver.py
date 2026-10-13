@@ -20,6 +20,8 @@ Policies
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+from numbers import Real
 from typing import Any, Literal, Optional
 
 from backend.engine.policy_registry import PolicyType, is_registered
@@ -73,6 +75,8 @@ class SemanticResolver:
         value_b: Any = None,
         timestamp_a: Optional[float] = None,
         timestamp_b: Optional[float] = None,
+        min_bound: int | float | None = None,
+        max_bound: int | float | None = None,
         **kwargs: Any,
     ) -> ResolutionResult:
         val_a = replica_a_value if replica_a_value is not None else value_a
@@ -114,6 +118,42 @@ class SemanticResolver:
                 )
             except Exception as exc:
                 raise ResolutionError(f"SUM failed: {exc}") from exc
+
+        if upper == "BOUNDED_SUM":
+            if min_bound is None or max_bound is None:
+                raise ResolutionError("BOUNDED_SUM requires valid explicit min_bound and max_bound values.")
+            values = (base_value, val_a, val_b, min_bound, max_bound)
+            if any(not isinstance(value, Real) or isinstance(value, bool) for value in values):
+                raise ResolutionError("BOUNDED_SUM requires finite numeric base, values, and bounds.")
+            if any(not math.isfinite(float(value)) for value in values):
+                raise ResolutionError("BOUNDED_SUM requires finite numeric base, values, and bounds.")
+            if min_bound > max_bound:
+                raise ResolutionError("BOUNDED_SUM minimum bound must be less than or equal to maximum bound.")
+            base = base_value
+            delta_a = val_a - base
+            delta_b = val_b - base
+            candidate = base + delta_a + delta_b
+            explanation = (
+                f"BOUNDED_SUM base={base}, signed deltas=({delta_a:+}, {delta_b:+}), "
+                f"candidate={candidate}, inclusive bounds=[{min_bound}, {max_bound}]."
+            )
+            if candidate < min_bound or candidate > max_bound:
+                side = "underflow" if candidate < min_bound else "overflow"
+                return ResolutionResult(
+                    status="flagged", resolved_value=candidate, policy=policy,
+                    explanation=f"{explanation} Unsafe {side}; operation remains pending and no value was materialized.",
+                    is_deterministic=True,
+                )
+            if base_value < min_bound or base_value > max_bound or val_a < min_bound or val_a > max_bound or val_b < min_bound or val_b > max_bound:
+                return ResolutionResult(
+                    status="flagged", resolved_value=candidate, policy=policy,
+                    explanation=f"{explanation} An observed value is outside bounds; operation remains pending.",
+                    is_deterministic=True,
+                )
+            return ResolutionResult(
+                status="resolved", resolved_value=candidate, policy=policy,
+                explanation=f"{explanation} Candidate is within bounds.", is_deterministic=True,
+            )
 
         if upper == "AVG":
             try:

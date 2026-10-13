@@ -1,50 +1,60 @@
-# SemanticSync — Literature Review
+# SemanticSync — Literature Review & Theoretical Context
 
-**Version:** 1.0  
-**Field:** Distributed Systems, Local-First Software, Conflict-Free Replicated Data Types
-
----
-
-## 1. Foundational CRDT Theory
-
-### Shapiro et al. (2011) — Conflict-Free Replicated Data Types
-- *Citation:* Shapiro, M., Preguiça, N., Baquero, C., & Zawirski, M. (2011). *Conflict-free replicated data types*. SSS 2011.
-- *Relevance:* Established the formal mathematical foundations for state-based (CvRDT) and operation-based (CmRDT) convergence. Proved that monotonic semi-lattices ensure Strong Eventual Consistency without consensus rounds.
-- *Limitation relative to SemanticSync:* Standard CvRDT registers (e.g., LWW-Register, Multi-Value Register) either discard concurrent values or delegate conflict sets to the application layer without relational schema awareness.
+**Version:** 2.0 (Reconciled)  
+**Field:** Distributed Computing (`cs.DC`), Database Systems (`cs.DB`)
 
 ---
 
-## 2. Local-First Software & Edge Databases
+## 1. Verified Foundational Literature
 
-### Kleppmann et al. (2019) — Local-First Software: You Own Your Data, in spite of the Cloud
-- *Citation:* Kleppmann, M., Wiggins, A., van Hardenberg, M. A., & McGranaghan, M. (2019). *Local-first software: you own your data, in spite of the cloud*. Onward! 2019.
-- *Relevance:* Outlined seven ideals of local-first computing, prioritizing client-side storage, offline capability, cross-device synchronization, and conflict resolution.
-- *Connection to SemanticSync:* SemanticSync provides a practical relational realization of local-first ideals directly on developer-standard SQLite engines.
+### Conflict-Free Replicated Data Types (CRDTs)
+- **Shapiro et al. (2011)** — *Conflict-free replicated data types* (SSS 2011).
+  - *Contribution:* Formulated State-based (CvRDT) and Operation-based (CmRDT) systems. Proved that monotonic join-semilattices $\langle S, \sqcup \rangle$ guarantee Strong Eventual Consistency (SEC) across partial orders.
+  - *Connection to SemanticSync:* Standard LWW registers are join-semilattices over $(\text{timestamp}, \text{value})$ tuples. However, when applied to relational attributes (such as counters or texts), the LWW semilattice ordering ignores operation deltas.
+- **Gomes, Kleppmann, et al. (2017)** — *Verifying Strong Eventual Consistency in Distributed Systems* (OOPSLA 2017 / [arXiv:1707.01747](https://arxiv.org/abs/1707.01747)).
+  - *Contribution:* Machine-checked verification of CRDT convergence (RGA, OR-Set, PN-Counter) in Isabelle/HOL. Established an axiomatic network model capturing message delivery anomalies.
+  - *Relevance to SemanticSync:* Informs our verification strategy. For SemanticSync policies to guarantee SEC, each operator must be rigorously analyzed for commutativity and associativity over historical operations.
 
-### Kulkarni et al. (2014) — Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases
-- *Citation:* Kulkarni, S., Dachiraju, M., & Liu, S. (2014). *Logical physical clocks and consistent snapshots in globally distributed databases*.
-- *Relevance:* Formulated the Hybrid Logical Clock (HLC) algorithm, bounding logical tick advancement to physical wall-clock drift while providing causal ordering and strict monotonicity.
-- *Usage in SemanticSync:* Utilized within `backend/engine/crdt_sync.py` to deterministically order concurrent writes across replicas.
+### Causality and Hybrid Logical Clocks
+- **Kulkarni et al. (2014)** — *Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases*.
+  - *Contribution:* Formulated the Hybrid Logical Clock (HLC). Bounded logical clock progression by wall-clock drift while preserving monotonic causal ordering.
+  - *Application:* Used in SemanticSync (`backend/engine/crdt_sync.py`) to provide deterministic causality tracking across distributed SQLite replicas.
+
+### Local-First Relational Systems & Extensions
+- **Kleppmann et al. (2019)** — *Local-first software: you own your data, in spite of the cloud* (Onward! 2019).
+  - *Contribution:* Defined the seven architectural ideals of local-first software.
+- **Marr et al. (2023)** — *Live & Local Schema Change: Challenge Problems* ([arXiv:2309.11406](https://arxiv.org/abs/2309.11406)).
+  - *Contribution:* Outlined open challenges in local-first database replication: schema migration drift, foreign key orphanages, and cross-row constraint preservation.
+- **CR-SQLite (vlcn.io) / ElectricSQL / PowerSync:**
+  - *Current Landscape:* CR-SQLite implements a C-extension for SQLite embedding LWW-per-column and fractional indexing via a delta-table (`crsql_changes`). ElectricSQL and PowerSync use central Postgres engines with logical replication to manage partial SQLite sync.
+  - *Differentiation:* Most existing relational replication engines default to column-level LWW or server-mediated transactions. SemanticSync investigates declarative, type-validated semantic policies (`SUM`, `AVG`, `APPEND`, `REJECT`) executed directly over native SQLite without specialized external services.
 
 ---
 
-## 3. Relational CRDTs and Database Merging
+## 2. Invariant-Preserving Replication Literature
 
-### CR-SQLite and VLCN
-- *Relevance:* CR-SQLite embeds fractional index and run-length CRDT algorithms as SQLite loadable C extensions. It tracks column-level mutations using change logs (`crsql_changes`).
-- *Contrast:* CR-SQLite operates primarily as a Last-Write-Wins column-level engine or delta-state tracker. It does not provide extensible declarative semantic policies (such as delta `SUM`, arithmetic `AVG`, or deterministic delimiter `APPEND`) configured at the schema abstraction level.
+A critical research area is preserving relational and numeric constraints under weak consistency:
 
-### Operational Transformation (OT) vs. CRDTs in Collaborative Contexts
-- *Relevance:* While OT (Ellis & Gibbs, 1989) successfully powers character-by-character text collaboration (e.g., Google Docs), it requires centralized transformation servers. CRDTs enable decentralized peer exchange.
-- *SemanticSync's position:* Leverages declarative policies above the relational schema, bringing CRDT safety to structured business rows.
+- **Balegas et al. (2018)** — *IPA: Invariant-preserving Applications for Weakly-consistent Replicated Databases* ([arXiv:1802.08474](https://arxiv.org/abs/1802.08474)).
+  - *Contribution:* Static analysis and runtime repair actions to uphold application correctness under weak consistency without full coordination.
+  - *Relevance:* Supports SemanticSync's strategy of explicit conflict flagging (`REJECT`) and orphan quarantine rather than silent corruption.
+- **Balegas et al. (2015)** — *Extending Eventually Consistent Cloud Databases for Enforcing Numeric Invariants* ([arXiv:1503.09052](https://arxiv.org/abs/1503.09052)).
+  - *Contribution:* Bounded counters using escrow techniques to prevent numeric underflow (e.g., negative inventory or negative balance) under eventual consistency.
+  - *Connection to SemanticSync:* Demonstrates that naive additive `SUM` ($base + \Delta A + \Delta B$) is unsafe under negative deltas without explicit boundary enforcement.
+- **Lewchenko et al. (2018)** — *Conflict-Aware Replicated Data Types (CARDs)* ([arXiv:1802.08733](https://arxiv.org/abs/1802.08733)).
+  - *Contribution:* CARDs use consistency guards (two-state predicates) to determine whether concurrent operations can proceed or must be flagged/blocked.
 
 ---
 
-## 4. Gaps in Existing Research
+## 3. Comparison Matrix: State of the Art vs. SemanticSync
 
-| Approach | Convergence Guarantee | Semantic Awareness | Type-Level Validation | Pure SQLite Native |
+| Dimension | Generic LWW CRDT | CR-SQLite | ElectricSQL | SemanticSync (This Project) |
 |---|---|---|---|---|
-| Git / 3-Way Text Diff | ❌ (Frequent merge conflicts) | ❌ Textual only | ❌ None | ❌ |
-| Traditional LWW CRDT | ✅ (SEC) | ❌ Last timestamp wins | ❌ Blind register | ⚠️ (Requires custom wrappers) |
-| Multi-Value Register (MVR) | ✅ (SEC) | ⚠️ Retains all, defers | ❌ No resolution | ❌ |
-| **SemanticSync** | **✅ (SEC via HLC + Semantics)** | **✅ Declarative Policies** | **✅ Pre-sync Validator** | **✅ Pure SQLite + Python** |
+| **Underlying Engine** | Key-Value / Object | SQLite (C Ext) | Postgres ↔ SQLite | Standard SQLite (`sqlite3`) |
+| **Convergence Mechanism** | HLC / Vector Clocks | Fractional Index / LWW | Logical Replication stream | HLC + 3-Way Diff Log |
+| **Merge Granularity** | Register (Scalar) | Column-level LWW | Table / Row stream | Schema Column Policy |
+| **Arithmetic Merges (`SUM`, `AVG`)** | ❌ (Overwrites) | ❌ (Overwrites) | ❌ (Server rules) | ✅ Declarative middleware |
+| **Text Merge (`APPEND`)** | ❌ (Overwrites) | ❌ (Overwrites) | ❌ (Overwrites) | ✅ Deterministic delimiter merge |
+| **Type Compatibility Validation**| ❌ None | ⚠️ Basic SQL affinity | ⚠️ Schema compilation | ✅ Pre-runtime `422` validator |
+| **Safety Invariant (`REJECT`)** | ❌ (Silent win) | ❌ (Silent win) | ⚠️ Transaction failure | ✅ Durable triage record |
+| **Multi-Table FK Quarantine** | ❌ (Orphan failure)| ⚠️ Cascades / Ignores | ✅ Server-enforced | 📋 Phased implementation |

@@ -151,6 +151,10 @@ class SyncRequest(BaseModel):
     db_id: str
     replica_a_id: str
     replica_b_id: str
+    tombstone_policy: Optional[str] = Field(
+        "FLAG_FOR_REVIEW",
+        description="Policy for concurrent UPDATE vs DELETE: 'FLAG_FOR_REVIEW', 'DELETE_WINS', 'UPDATE_RESURRECTS'.",
+    )
 
 
 class GenerateConflictRequest(BaseModel):
@@ -219,6 +223,44 @@ class BenchmarkMetrics(BaseModel):
     resolution_overhead_ms: float
     total_conflicts_evaluated: int
     correct_semantic_outcomes: int
+
+
+class StressBenchmarkRequest(BaseModel):
+    """Body for POST /api/v1/benchmark/stress."""
+
+    num_operations: int = Field(1000, description="1000, 5000, or 10000 operations.")
+    conflict_density: float = Field(0.20, description="0.05, 0.20, or 0.50 conflict density.")
+    seed: int = Field(42, description="Random seed for reproducibility.")
+    export_artifacts: bool = Field(True, description="Whether to export JSON/CSV benchmark artifacts.")
+
+
+class StressBenchmarkMetrics(BaseModel):
+    """Response model for POST /api/v1/benchmark/stress."""
+
+    config: dict[str, Any]
+    environment: dict[str, Any]
+    num_operations: int
+    conflict_density: float
+    total_conflicts_evaluated: int
+    baseline_scr: float
+    semantic_sync_scr: float
+    baseline_convergence_rate: float
+    semantic_sync_convergence_rate: float
+    p50_latency_ms: float
+    p95_latency_ms: float
+    p99_latency_ms: float
+    avg_latency_ms: float
+    total_sync_time_ms: float
+    resolution_overhead_ms: float
+    change_log_entries: int
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    baseline_vra: float = 0.0
+    semantic_sync_vra: float = 0.0
+    baseline_sync_time_ms: float = 0.0
+    semantic_sync_sync_time_ms: float = 0.0
+    baseline_change_log_entries: int = 0
+    semantic_sync_change_log_entries: int = 0
+    workload_digest: str = ""
 
 
 # ─────────────────────────────────────────────

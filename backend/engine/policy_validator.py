@@ -19,6 +19,8 @@ from backend.engine.policy_registry import (
     compatible_types,
     get_policy,
     is_registered,
+    parse_bounded_sum_bounds,
+    policy_base_name,
 )
 
 
@@ -68,6 +70,7 @@ class PolicyValidator:
             upper_policy = str(target_policy.value).strip().upper()
         else:
             upper_policy = str(target_policy).strip().upper()
+        base_policy = policy_base_name(upper_policy)
 
         upper_type = str(target_type).strip().upper() if target_type else "TEXT"
 
@@ -79,19 +82,28 @@ class PolicyValidator:
                 error_code="UNKNOWN_POLICY",
                 error_message=(
                     f"Policy '{upper_policy}' is not registered. "
-                    "Valid policies: SUM, AVG, APPEND, LWW, REJECT, MIN, MAX."
+                    "Valid policies: SUM, AVG, APPEND, LWW, REJECT, MIN, MAX, BOUNDED_SUM[min=...,max=...]."
                 ),
             )
 
+        if base_policy == "BOUNDED_SUM":
+            try:
+                parse_bounded_sum_bounds(upper_policy)
+            except ValueError as exc:
+                return ValidationResult(
+                    valid=False, policy="BOUNDED_SUM", error_code="INVALID_BOUNDS",
+                    error_message=str(exc),
+                )
+
         # 2. Check type compatibility
-        compat = compatible_types(upper_policy)
+        compat = compatible_types(base_policy)
 
         # Wildcard: policy accepts any type
         if "*" in compat:
             try:
-                enum_val = PolicyType(upper_policy)
+                enum_val = PolicyType(base_policy)
             except ValueError:
-                enum_val = upper_policy  # type: ignore[assignment]
+                enum_val = base_policy  # type: ignore[assignment]
             return ValidationResult(valid=True, policy=enum_val)
 
         if upper_type not in compat:
@@ -107,9 +119,9 @@ class PolicyValidator:
             )
 
         try:
-            enum_val = PolicyType(upper_policy)
+            enum_val = PolicyType(base_policy)
         except ValueError:
-            enum_val = upper_policy  # type: ignore[assignment]
+            enum_val = base_policy  # type: ignore[assignment]
 
         return ValidationResult(valid=True, policy=enum_val)
 

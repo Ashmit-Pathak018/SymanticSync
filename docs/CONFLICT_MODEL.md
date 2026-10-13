@@ -1,167 +1,143 @@
-# SemanticSync — Conflict Model
+# SemanticSync — Conflict Taxonomy & Row-Mutation Resolution Model
 
-**Version:** 1.0
-
----
-
-## 1. What is a Conflict?
-
-In SemanticSync, a **conflict** is a **concurrent divergence**: a situation where two independent replicas (A and B) have both modified the same cell relative to a shared base state, and the resulting values differ.
-
-```
-                    Base State
-                   ┌──────────┐
-                   │ qty = 100│
-                   └────┬─────┘
-            ┌───────────┴───────────┐
-            ▼                       ▼
-     Replica A writes         Replica B writes
-      qty = 115 (+15)          qty = 120 (+20)
-            │                       │
-            └───────────┬───────────┘
-                        ▼
-              ⚡ CONFLICT DETECTED
-              base=100, a=115, b=120
-```
-
-**Not a conflict:**
-- Only one replica changed the value (the other kept the base) → clean update, no conflict.
-- Both replicas changed to the **same** value → idempotent, no conflict.
+**Version:** 3.0 (Phase 2 Implemented Specification)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 2. Conflict Detection Algorithm
+## 1. Relational Mutation Conflict Taxonomy
 
-`ConflictDetector.detect()` performs a three-way comparison:
+In distributed relational replicas, mutations are not limited to cell-level divergence between existing rows. Mutations include full row lifecycles: `INSERT`, `UPDATE`, and `DELETE`.
 
-```python
-for table in base_tables:
-    for row in base_rows:
-        for column in non_pk_columns:
-            base_val = base_db[table][row][column]
-            a_val    = replica_a_db[table][row][column]
-            b_val    = replica_b_db[table][row][column]
+SemanticSync defines a formal 2-dimensional conflict matrix across these mutations:
 
-            if a_val != base_val and b_val != base_val and a_val != b_val:
-                # True concurrent conflict
-                yield ConflictInfo(...)
 ```
-
-This correctly distinguishes:
-- `a_val == base_val` → A didn't change it → no conflict, B's value is authoritative
-- `b_val == base_val` → B didn't change it → no conflict, A's value is authoritative
-- Both changed, same value → no conflict (converged naturally)
-- **Both changed, different values → ⚡ CONFLICT**
+┌───────────────────────────────────────────────────────────────────────────────────────┐
+│                           RELATIONAL MUTATION CONFLICT MATRIX                         │
+├─────────────────────┬──────────────────────────┬──────────────────────────────────────┤
+│ Mutation Pair       │ Conflict Character       │ Default Resolution & Policy          │
+├─────────────────────┼──────────────────────────┼──────────────────────────────────────┤
+│ UPDATE vs UPDATE    │ Cell-level divergence    │ Semantic Policy Merge (SUM, LWW...)  │
+│ INSERT vs INSERT    │ Primary Key collision    │ Idempotent if equal; else Flag/Review│
+│ INSERT vs INSERT    │ UNIQUE index collision   │ Flag for Review (Never overwrite)    │
+│ UPDATE vs DELETE    │ Ghost Row mutation       │ Causal: Del wins; Conc: Flag/Review  │
+│ DELETE vs DELETE    │ Concurrent deletion      │ Idempotent convergence (No conflict) │
+│ DELETE vs UPDATE    │ Symmetric ghost row      │ Symmetric to UPDATE vs DELETE        │
+│ Parent DEL vs Child │ Foreign Key orphan       │ Quarantine Table (Phase 5)           │
+└─────────────────────┴──────────────────────────┴──────────────────────────────────────┘
+```
 
 ---
 
-## 3. ConflictInfo Data Model
+## 2. Operation Identity & Metadata Contract
+
+Every row mutation in SemanticSync generates an immutable operation record in `_ss_change_log`:
+
+```sql
+CREATE TABLE IF NOT EXISTS _ss_change_log (
+    id           TEXT PRIMARY KEY,        -- UUID4 operation identity
+    table_name   TEXT NOT NULL,           -- Target table
+    row_id       TEXT NOT NULL,           -- Row primary key identity
+    column_name  TEXT NOT NULL,           -- Target column, or '*' for row-level ops
+    old_value    TEXT,                    -- Pre-mutation value or serialized JSON
+    new_value    TEXT,                    -- Post-mutation value or serialized JSON (NULL on DELETE)
+    ts_pt        REAL NOT NULL,           -- Hybrid Logical Clock physical time
+    ts_l         INTEGER NOT NULL,        -- Hybrid Logical Clock logical counter
+    replica_id   TEXT NOT NULL,           -- Originating replica node ID
+    applied_at   TEXT NOT NULL,           -- ISO-8601 UTC timestamp
+    op_type      TEXT NOT NULL DEFAULT 'UPDATE' -- 'INSERT' | 'UPDATE' | 'DELETE'
+);
+```
+
+### Operation Identity Invariants:
+1. **Uniqueness:** Each operation has a distinct UUID `id`.
+2. **Causal Monotonicity:** Within a replica, `(ts_pt * 1e6 + ts_l)` is strictly monotonically increasing.
+3. **Row Identity:** Rows are identified by their primary key `row_id`.
+4. **Operation Type (`op_type`):**
+   - `INSERT`: Created new row. `old_value` is `NULL`. `new_value` holds full row JSON or column value.
+   - `UPDATE`: Modified existing cell or row. `old_value` and `new_value` record divergence.
+   - `DELETE`: Deleted row. `new_value` is `NULL`. Acts as an explicit durable tombstone.
+
+---
+
+## 3. Row Mutation Conflict Resolution Rules
+
+### 3.1 INSERT vs INSERT Collisions
+
+When row $k$ does not exist in the ancestor base database $S_{\text{base}}$, but exists in both $S_A$ and $S_B$:
+
+1. **Identical Duplicate Delivery (Idempotency):**
+   - If row payloads are identical ($S_A[k] \equiv S_B[k]$):
+   - **Resolution:** No conflict. Both replicas inserted the identical logical entity. State converges seamlessly.
+2. **Primary Key Collision (Divergent Payloads):**
+   - If row payloads differ ($S_A[k] \neq S_B[k]$):
+   - **Default Rule:** Flagged for manual review (`status = 'flagged'`, `conflict_type = 'INSERT_INSERT'`).
+   - **Payload Preservation:** Both competing full row payloads are durably preserved in `ConflictInfo` (`replica_a_value` and `replica_b_value` contain full row dictionaries/JSON).
+   - **Safety Directive:** Do not silently overwrite data. Automatic rekeying is prohibited unless explicit schema rules and foreign-key preservation contracts exist.
+3. **Secondary UNIQUE Index Collisions:**
+   - Both replicas insert rows with different PKs ($k_1 \neq k_2$), but sharing an identical value on a column governed by a `UNIQUE` constraint or unique index.
+   - **Resolution:** Marked as `flagged` (`conflict_type = 'UNIQUE_CONSTRAINT_COLLISION'`). Rows remain in their respective replicas without cross-copying to avoid SQLite constraint violations.
+
+---
+
+## 3.2 UPDATE vs DELETE & Tombstone Semantics
+
+When row $k$ existed in $S_{\text{base}}$, but has been deleted in one replica (e.g., $R_B$) while modified in the other ($R_A$):
+
+1. **Causally Ordered (Update followed by Delete):**
+   - If change logs show that deletion on $R_B$ causally happened **after** the update on $R_A$ (e.g. via HLC dominance or vector awareness):
+   - **Resolution:** Deletion wins cleanly. The tombstone is propagated to $R_A$.
+2. **Truly Concurrent UPDATE vs DELETE:**
+   - If both operations were performed concurrently against the base snapshot without knowledge of each other:
+   - **Default Policy (Safety First):** `FLAG_FOR_REVIEW`.
+     - Record emitted with `conflict_type = 'UPDATE_DELETE'`.
+     - `replica_a_value`: The updated row snapshot or cell change.
+     - `replica_b_value`: `None` (representing deletion/tombstone).
+     - State is not silently resurrected or permanently lost until explicit resolution or policy execution.
+   - **Configurable `tombstone_policy`:**
+     - `DELETE_WINS`: Tombstone wins, row deleted on both replicas, update preserved in conflict audit log.
+     - `UPDATE_RESURRECTS`: The update wins, row re-inserted or retained with updated values.
+     - `FLAG_FOR_REVIEW` (Default): Manual triage required.
+
+---
+
+## 3.3 DELETE vs DELETE Idempotency
+
+When row $k$ existed in $S_{\text{base}}$ and has been deleted in **both** $S_A$ and $S_B$:
+
+- **Resolution:** Clean convergence (no conflict emitted).
+- **Semantics:** Idempotent no-op.
+- **Tombstone Propagation:** Both replicas agree that row $k$ does not exist. Tombstone log entries are retained in `_ss_change_log` for future replicas and causal stability checking.
+
+---
+
+## 4. Conflict Lifecycle, Auditability & Recovery
+
+Every conflict detected by `ConflictDetector` is recorded in `MergeManager` with full structural metadata:
 
 ```python
 @dataclass
 class ConflictInfo:
-    conflict_id: str        # UUID4 — unique identifier
-    table: str              # SQLite table name
-    row_id: Any             # Primary key value
-    column: str             # Column name
-    base_value: Any         # Value in the common base snapshot
-    replica_a_value: Any    # Diverged value in Replica A
-    replica_b_value: Any    # Diverged value in Replica B
-    replica_a_id: str       # Logical name of Replica A
-    replica_b_id: str       # Logical name of Replica B
-    replica_a_ts: float     # HLC timestamp of Replica A's write
-    replica_b_ts: float     # HLC timestamp of Replica B's write
-    detected_at: str        # ISO-8601 UTC detection timestamp
+    conflict_id: str             # UUID4 unique ID
+    table: str                   # SQLite table name
+    row_id: Any                  # Primary key value
+    column: str                  # Column name, or '*' for row-level conflicts
+    conflict_type: str           # 'UPDATE_UPDATE' | 'INSERT_INSERT' | 'UPDATE_DELETE' | 'UNIQUE_COLLISION'
+    base_value: Any              # Common ancestor value or row dict (None for INSERTs)
+    replica_a_value: Any         # Replica A value or row payload
+    replica_b_value: Any         # Replica B value or row payload
+    replica_a_id: str            # Replica A identifier
+    replica_b_id: str            # Replica B identifier
+    replica_a_ts: float          # Causal timestamp A
+    replica_b_ts: float          # Causal timestamp B
+    detected_at: str             # ISO-8601 UTC timestamp
+    status: str = "pending"      # 'pending' | 'resolved' | 'flagged'
+    resolution_mode: Optional[str] = None # 'auto' | 'pick_a' | 'pick_b' | 'custom'
+    resolved_value: Optional[Any] = None
+    explanation: Optional[str] = None
 ```
 
----
-
-## 4. Conflict Lifecycle
-
-```
-          Detected
-              │
-              ▼
-        ┌──────────┐
-        │  pending  │  ← Stored in MergeManager, not yet resolved
-        └─────┬─────┘
-              │
-    ┌─────────┴──────────┐
-    │                    │
-    ▼                    ▼
-┌────────┐          ┌─────────┐
-│resolved│          │ flagged │  ← REJECT policy or validation failure
-└────────┘          └────┬────┘
-                         │
-                         ▼
-                   Manual Review
-                  (pick_a / pick_b / custom)
-                         │
-                         ▼
-                     resolved
-```
-
-### Status Values
-| Status | Meaning |
-|---|---|
-| `pending` | Detected but not yet processed |
-| `resolved` | Automatically resolved by policy |
-| `flagged` | Rejected by `REJECT` policy; awaiting human decision |
-
----
-
-## 5. Resolution Modes
-
-When resolving via `POST /api/v1/conflicts/resolve`:
-
-| Mode | Description |
-|---|---|
-| `auto` | Use the assigned policy from AppState (calls `SemanticResolver`) |
-| `pick_a` | Accept Replica A's value unconditionally |
-| `pick_b` | Accept Replica B's value unconditionally |
-| `custom` | Supply a custom resolved value directly |
-
----
-
-## 6. Conflict Storage
-
-Conflicts are persisted in two places:
-1. **`AppState.conflicts`** — in-memory dict (`conflict_id → dict`) backed by `data/registry.json`
-2. **`MergeManager`** — optional secondary store at `data/conflicts.json`
-
-Both stores keep full conflict records including both replica values and resolution history.
-
----
-
-## 7. Write-Back Safety
-
-When a conflict is resolved (either automatically or manually), the resolved value is written back to **both** replicas using parameterized SQL:
-
-```python
-conn.execute(
-    f'UPDATE "{table}" SET "{column}" = ? WHERE id = ?',
-    (resolved_value, row_id)
-)
-```
-
-**REJECT conflicts are never written back** — replicas remain in their diverged state until a human makes a decision.
-
----
-
-## 8. Concurrent vs. Sequential Changes
-
-| Scenario | Conflict? | Resolution |
-|---|---|---|
-| A=110, B=base(100) | No | Take A's value |
-| A=base(100), B=120 | No | Take B's value |
-| A=115, B=115 (same) | No | Values already agree |
-| A=115, B=120 (different) | **Yes** | Apply policy |
-| A=115, B=115 but base=100 | No | Both changed to same — no conflict |
-
----
-
-## 9. Primary Key Conflicts
-
-SemanticSync currently does **not** resolve PRIMARY KEY conflicts (row insertions with the same PK). The conflict detector operates on existing rows only (UPDATE divergences).
-
-Schema-level constraints (NOT NULL, CHECK) are not enforced during write-back — they remain the responsibility of the application layer.
+### Recovery & Idempotent Write-Back Contract
+1. **Transactional Execution:** All write-backs execute inside an explicit `conn.transaction` block.
+2. **Retry Safety:** Applying the same resolution multiple times is strictly idempotent.
+3. **Full Audit Trail:** Resolved conflicts retain `resolved_value`, `resolved_at`, and `explanation` in `MergeManager` and `AppState`.

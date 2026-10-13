@@ -1,70 +1,92 @@
-# SemanticSync — Experimental Design
+# SemanticSync — Empirical Evaluation & Experimental Design
 
-**Version:** 1.0
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 1. Experimental Setup
+## 1. Experimental Methodology
 
-The evaluation framework rigorously tests whether declarative semantic policies resolve concurrent mutations in relational replicas without loss of business intent or convergence anomalies.
+The objective of the experimental harness is to test whether schema-declared semantic policies deliver higher semantic correctness than standard timestamp registers without compromising state convergence or latency.
 
-### Controlled Divergence Architecture
+### Scientific Integrity Principles
+1. **Fair Baseline Comparison:** The baseline (Generic LWW) and the proposed system (SemanticSync) are evaluated against identical initial states, identical concurrent mutation traces, and identical timestamp distributions.
+2. **Independent Ground Truth:** Expected outcomes are established a priori based on domain invariants, completely independent of resolver implementation code.
+3. **Reproducibility:** Workload seeds, schema creation scripts, and mutation sequences are deterministic and version-controlled.
+
+---
+
+## 2. Benchmark Workloads & Conflict Scenarios
+
+### Domain 1: Inventory & Catalog Management (`InventoryWorkload`)
+- **Schema:** `products(id INTEGER PK, sku TEXT, name TEXT, quantity INTEGER, unit_price REAL, description TEXT)`
+- **Policy Mapping:**
+  - `quantity -> SUM` (Additive inventory adjustments)
+  - `description -> APPEND` (Collaborative notes/descriptions)
+  - `sku -> REJECT` (Immutable product SKU)
+  - `name -> LWW` (Title updates)
+  - `unit_price -> AVG` (Price compromise/averaging)
+
+### Domain 2: Collaborative Notes & Revisions (`NotesWorkload`)
+- **Schema:** `notes(id INTEGER PK, title TEXT, body TEXT, author TEXT, edit_count INTEGER, updated_at TEXT)`
+- **Policy Mapping:**
+  - `body -> APPEND` (Text preservation)
+  - `edit_count -> SUM` (Revision counter)
+  - `author -> REJECT` (Attribution invariant)
+  - `title -> LWW` (Document naming)
+
+### Domain 3: Healthcare Telemetry & Records (`HealthWorkload`)
+- **Schema:** `patients(id INTEGER PK, name TEXT, blood_type TEXT, heart_rate INTEGER, dosage_mg REAL, clinical_notes TEXT)`
+- **Policy Mapping:**
+  - `heart_rate -> AVG` (Sensor reading reconciliation)
+  - `dosage_mg -> AVG` (Dosage reconciliation)
+  - `clinical_notes -> APPEND` (Preservation of observations)
+  - `blood_type -> REJECT` (Safety-critical immutable key)
+  - `name -> LWW` (Demographic update)
+
+---
+
+## 3. Evaluation Metrics
+
+### 1. Semantic Correctness Rate ($SCR$)
+$$SCR = \frac{\sum_{i=1}^{N} \mathbb{I}(\text{Result}_i = \text{GroundTruth}_i)}{N} \times 100\%$$
+- **Ground Truth Match Criteria:**
+  - For scalar / numeric: bitwise or arithmetic equality.
+  - For text append: preservation of both contributor strings.
+  - For `REJECT`: system sets status to `flagged`, leaves replica unmutated, and registers conflict record.
+
+### 2. State Convergence Rate ($CR$)
+$$CR = \frac{\sum_{k=1}^{R} \mathbb{I}(S_A^k \equiv S_B^k)}{R} \times 100\%$$
+Measures whether synchronized replicas achieve bitwise state equivalence. Both Baseline and SemanticSync are required to achieve $CR = 100\%$.
+
+### 3. Validation Rejection Accuracy ($VRA$)
+Measures the system's ability to reject incompatible policy assignments before runtime (e.g., `SUM` on `TEXT` or `AVG` on `TEXT`). Required: $100\%$.
+
+### 4. Computational Overhead ($\Delta t$)
+Measures execution duration per conflict:
+$$\Delta t = \frac{T_{\text{sync\_end}} - T_{\text{sync\_start}}}{N_{\text{conflicts}}} \quad (\text{microseconds / milliseconds})$$
+
+---
+
+## 4. Empirical Protocol: Phased Scaling Plan
+
 ```
-              [Common Ancestor / Base DB]
-                           │
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-      [Replica Device A]          [Replica Device B]
-             │                           │
-    (Controlled Mutation Δa)    (Controlled Mutation Δb)
-             │                           │
-             └─────────────┬─────────────┘
-                           ▼
-              [Sync Execution & Evaluation]
-               ├── Generic LWW Engine (Baseline)
-               └── SemanticSync Engine (Proposed)
+┌────────────────────────────────────────────────────────────────────────┐
+│                      BENCHMARK SCALING PHASES                          │
+├─────────────────────┬──────────────────────────┬───────────────────────┤
+│ Tier                │ Conflict Count           │ Purpose               │
+├─────────────────────┼──────────────────────────┼───────────────────────┤
+│ Tier 1 (Current)    │ 9 conflicts (3 / workload│ Unit verification     │
+│ Tier 2 (Phase 4)    │ 1,000 conflicts          │ Statistical stability │
+│ Tier 3 (Phase 4)    │ 10,000 conflicts         │ Latency & throughput  │
+└─────────────────────┴──────────────────────────┴───────────────────────┘
 ```
 
----
-
-## 2. Evaluated Workload Domains
-
-We construct three diverse, realistic benchmark domains:
-
-### 1. Inventory & Supply Chain Workload (`InventoryWorkload`)
-- **Nature:** High-volume quantitative updates, textual catalog data, immutable SKU identifiers.
-- **Schema:** `products(id, sku, name, quantity, unit_price, description)`
-- **Target Policies:** `quantity -> SUM`, `description -> APPEND`, `sku -> REJECT`, `name -> LWW`, `unit_price -> AVG`
-
-### 2. Collaborative Document Notes Workload (`NotesWorkload`)
-- **Nature:** Rich-text note modifications, revision metrics, author verification.
-- **Schema:** `notes(id, title, body, author, edit_count, updated_at)`
-- **Target Policies:** `body -> APPEND`, `edit_count -> SUM`, `author -> REJECT`, `title -> LWW`
-
-### 3. Patient Health Metrics Workload (`HealthWorkload`)
-- **Nature:** Safety-critical sensor telemetries, patient identifiers, doctor clinical notes.
-- **Schema:** `patients(id, name, blood_type, heart_rate, dosage_mg, clinical_notes)`
-- **Target Policies:** `heart_rate -> AVG`, `dosage_mg -> AVG`, `clinical_notes -> APPEND`, `blood_type -> REJECT`, `name -> LWW`
-
----
-
-## 3. Conflict Injection Protocol
-
-For each workload, three deterministic conflict scenarios are systematically generated:
-1. **Additive/Counter Divergence:** Independent scalar additions against baseline values.
-2. **Textual/Cumulative Divergence:** Independent textual updates intended to preserve collaborative inputs.
-3. **Safety-Critical / Immutable Divergence:** Uncoordinated attempts to modify immutable identifiers or invariant attributes.
-
----
-
-## 4. Evaluation Procedure
-
-1. **Instantiation:** Generate base SQLite database with known seed fixtures.
-2. **Forking:** Instantiate identical replicas $R_A$ and $R_B$ with active `_ss_change_log` tables.
-3. **Mutation:** Apply divergent mutations $M_A$ and $M_B$ at controlled HLC timestamps ($T_A < T_B$).
-4. **Baseline Execution:** Execute timestamp-ordered Last-Write-Wins merge.
-5. **Semantic Execution:** Execute SemanticSync `CRDTSyncEngine.sync_replicas()` with registered policies.
-6. **Comparison & Verification:**
-   - Verify state convergence: $R_A \equiv R_B$.
-   - Compare converged values against predetermined ground-truth expectations.
-   - Record convergence status, Semantic Correctness Rate ($SCR$), and resolution execution time ($\mu s$).
+### Tier 2 & Tier 3 Parametric Configuration
+In Phase 4, synthetic trace generators will simulate:
+- **Conflict Densities:** $5\%$, $20\%$, $50\%$ of total table rows.
+- **Replica Topologies:** Pairwise ($N=2$) scaling to Mesh ($N=3, 5$).
+- **Telemetry Collected:**
+  - Latency percentiles: p50, p95, p99.
+  - Throughput: conflicts resolved per second.
+  - Change log expansion rate (bytes per transaction).

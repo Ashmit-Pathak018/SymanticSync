@@ -1,59 +1,61 @@
-# SemanticSync — Results Protocol
+# SemanticSync — Results Protocol & Empirical Telemetry
 
-**Version:** 1.0
-
----
-
-## 1. Protocol Objective
-
-This document formalizes the reproducible testing procedure for executing, recording, and publishing benchmark evaluations of SemanticSync against the Generic LWW baseline.
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 2. Execution Steps
+## 1. Distinguishing Measured Results vs. Future Targets
 
-### Step 1: Pre-run Verification
-Ensure dependencies and clean workspace:
-```bash
-python -m pytest backend/tests/ -v
-```
-All 56 tests must pass before running the protocol.
+To maintain strict scientific integrity in the documentation:
 
-### Step 2: Automated Benchmark Execution
-Invoke the automated benchmark route across each of the three workloads:
-
-```bash
-# Inventory Workload
-curl -X POST http://127.0.0.1:8000/api/v1/benchmark/run \
-  -H "Content-Type: application/json" \
-  -d '{"workload": "inventory"}'
-
-# Notes Workload
-curl -X POST http://127.0.0.1:8000/api/v1/benchmark/run \
-  -H "Content-Type: application/json" \
-  -d '{"workload": "notes"}'
-
-# Health Workload
-curl -X POST http://127.0.0.1:8000/api/v1/benchmark/run \
-  -H "Content-Type: application/json" \
-  -d '{"workload": "health"}'
-```
+| Status Tag | Meaning |
+|---|---|
+| **[Measured]** | Empirically verified on the current codebase via automated unit/benchmark tests. |
+| **[Target]** | Planned research objective for scaled workloads ($N \ge 1,000$). |
 
 ---
 
-## 3. Empirical Results Summary
+## 2. Currently Measured Empirical Results (Tier 1: 9 Scenarios)
 
-| Workload Domain | Baseline LWW SCR (%) | SemanticSync SCR (%) | Convergence Rate (%) | Resolution Overhead (ms/conflict) |
+The following metrics reflect verified execution on the current prototype across the 3 standard workloads:
+
+| Workload Domain | Conflict Count | Baseline LWW SCR (%) [Measured] | SemanticSync SCR (%) [Measured] | Convergence Rate (%) [Measured] | Overhead / Conflict [Measured] |
+|---|---|---|---|---|---|
+| **Inventory** | 3 | **33.3%** (1/3) | **100.0%** (3/3) | 100.0% | ~0.05 ms |
+| **Notes** | 3 | **33.3%** (1/3) | **100.0%** (3/3) | 100.0% | ~0.04 ms |
+| **Healthcare** | 3 | **33.3%** (1/3) | **100.0%** (3/3) | 100.0% | ~0.05 ms |
+| **Aggregate Mean** | **9** | **33.3%** | **100.0%** | **100.0%** | **< 0.1 ms** |
+
+### Verified Observations:
+1. On each workload, exactly one scenario is correctly resolved by LWW (the scenario where simple recency is the intended policy).
+2. The remaining two scenarios per workload (`SUM` delta and `APPEND` preservation) fail under LWW, yielding exactly 33.3% SCR.
+3. SemanticSync correctly resolves all 3 scenarios per workload (including flagging `REJECT` cases), yielding 100.0% SCR.
+
+---
+
+## 3. Scaled Benchmark Targets (Tier 2 & 3: Phase 4)
+
+The planned Phase 4 benchmark harness will execute parameterized stress runs with the following targets:
+
+| Workload Size | Conflict Density | Target Baseline SCR | Target SemanticSync SCR | Target p95 Latency |
 |---|---|---|---|---|
-| **Inventory** | 33.3% | **100.0%** | 100.0% | ~0.05 ms |
-| **Notes** | 33.3% | **100.0%** | 100.0% | ~0.04 ms |
-| **Healthcare** | 33.3% | **100.0%** | 100.0% | ~0.05 ms |
-| **Aggregate Mean** | **33.3%** | **100.0%** | **100.0%** | **< 0.1 ms** |
+| **1,000 Operations** | 5% | $\le 35.0\%$ | $\ge 95.0\%$ | $< 0.5\text{ ms}$ |
+| **1,000 Operations** | 20% | $\le 35.0\%$ | $\ge 95.0\%$ | $< 0.8\text{ ms}$ |
+| **10,000 Operations**| 50% | $\le 35.0\%$ | $\ge 90.0\%$ | $< 1.5\text{ ms}$ |
 
 ---
 
-## 4. Key Findings
+## 4. Reproducible Execution Protocol
 
-1. **Triple-Fold Semantic Correctness:** SemanticSync improves semantic reconciliation accuracy by $3\times$ ($33.3\% \to 100.0\%$) over Generic LWW across all evaluated domains.
-2. **Zero Convergence Regression:** State equivalence ($CR = 100\%$) is preserved across all replicas; semantic policies do not introduce divergence.
-3. **Negligible Latency Overhead:** Policy execution executes within $50\ \mu s$ per conflict, representing less than $1\%$ of disk I/O commit overhead.
+To reproduce the measured Tier 1 results:
+
+```bash
+# 1. Run unit test suite
+python -m pytest backend/tests/test_benchmark.py -v
+
+# 2. Execute live API benchmark endpoints
+curl -s -X POST http://127.0.0.1:8000/api/v1/benchmark/run -H "Content-Type: application/json" -d '{"workload": "inventory"}'
+curl -s -X POST http://127.0.0.1:8000/api/v1/benchmark/run -H "Content-Type: application/json" -d '{"workload": "notes"}'
+curl -s -X POST http://127.0.0.1:8000/api/v1/benchmark/run -H "Content-Type: application/json" -d '{"workload": "health"}'
+```

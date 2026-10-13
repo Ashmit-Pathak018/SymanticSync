@@ -156,6 +156,11 @@ Return all policy assignments for a database.
 ### `PUT /api/v1/databases/{db_id}/policies`
 Batch assign semantic policies.
 
+For bounded signed-delta reconciliation, use the numeric policy string
+`BOUNDED_SUM[min=<number>,max=<number>]`, for example
+`BOUNDED_SUM[min=0,max=100]`. Bounds must be finite and inclusive. The UI does
+not yet expose separate bound inputs.
+
 **Request Body:**
 ```json
 {
@@ -215,7 +220,27 @@ Detect all concurrent divergences between two replicas.
 }
 ```
 
-**Response:** `200 OK` — list of conflict records
+**Response:** `200 OK` — list of conflict records:
+```json
+[
+  {
+    "conflict_id": "uuid4",
+    "db_id": "db_inventory",
+    "table": "products",
+    "row_id": 1,
+    "column": "quantity",
+    "conflict_type": "UPDATE_UPDATE",
+    "base_value": 100,
+    "value_a": 115,
+    "value_b": 120,
+    "replica_a_id": "inventory_device_a",
+    "replica_b_id": "inventory_device_b",
+    "status": "pending"
+  }
+]
+```
+
+The `X-SemanticSync-Skipped-Tables` response header contains comma-separated table names that could not be analyzed because they lack a supported single-column primary key.
 
 ---
 
@@ -287,9 +312,12 @@ Execute the full synchronization pipeline.
 {
   "db_id": "db_inventory",
   "replica_a_id": "inventory_device_a",
-  "replica_b_id": "inventory_device_b"
+  "replica_b_id": "inventory_device_b",
+  "tombstone_policy": "FLAG_FOR_REVIEW"
 }
 ```
+
+`tombstone_policy` (optional): `"FLAG_FOR_REVIEW"` (default) | `"DELETE_WINS"` | `"UPDATE_RESURRECTS"`
 
 **Response:** `200 OK`
 ```json
@@ -300,9 +328,18 @@ Execute the full synchronization pipeline.
   "flagged_for_review": 1,
   "applied_changes": [...],
   "flagged_conflicts": ["uuid4"],
-  "duration_ms": 12.4
+  "duration_ms": 12.4,
+  "skipped_tables": ["legacy_composite_table"]
 }
 ```
+
+`skipped_tables` lists unsupported tables. The SyncHub UI displays this list as a warning.
+
+`rejected_operations` lists operations held because dependencies or expected row state did not validate. A sync can also raise after earlier operations committed; retry deduplicates those receipts by stable operation ID.
+
+### `POST /api/v1/sync/compact`
+
+Request: `{"db_id":"<registered database id>"}`. Compaction returns `status: retained` with zero pruned rows when any enrolled replica lacks a persisted ACK vector. Otherwise it reports the strict stable horizon, enrolled replicas, per-replica prune/retained counts, and aggregate row count. ACKs are exact operation IDs observed in durable replica logs; HLC is only a strict cutoff. Post-compaction replica creation bootstraps from an enrolled materialized replica, not the shared ancestor. This endpoint does not promise byte-level storage reduction or arbitrary offline-history recovery.
 
 ---
 

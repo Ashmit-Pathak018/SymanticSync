@@ -1,115 +1,61 @@
 # SemanticSync — Product Requirements Document (PRD)
 
-**Version:** 1.0  
-**Status:** Active  
-**Authors:** SemanticSync Core Team  
+**Version:** 2.0 (Reconciled)  
+**Status:** Approved Technical Specification  
 **Last Updated:** October 2026
 
 ---
 
-## 1. Problem Statement
+## 1. Product Vision & Problem Statement
 
-Distributed, offline-first, and collaborative applications built on SQLite face a fundamental unsolved challenge: when independent replicas of the same database diverge due to concurrent writes, how should conflicting field values be reconciled?
+Distributed, local-first applications built on SQLite face an unsolved challenge: when independent offline replicas modify the same record, how should conflicting values be reconciled?
 
-Generic CRDT frameworks (Last-Write-Wins, Add-Wins Sets, etc.) solve the **convergence** problem — they ensure all replicas eventually reach the same state — but they do not solve the **semantic** problem. A Last-Write-Wins strategy applied to a `quantity` column in an inventory system loses stock updates. A LWW strategy applied to a `clinical_notes` column silently discards a clinician's observation.
+Generic CRDT solutions solve **convergence** (ensuring all replicas eventually hold identical bytes), but they fail on **semantic correctness**. A Last-Write-Wins (LWW) register blindly overwrites additive counters (e.g., inventory depletions) and truncates collaborative notes.
 
-**SemanticSync solves this.** It provides a **schema-level semantic policy middleware** layer that sits above CRDT convergence mechanics and determines *how* a conflict should be resolved based on what the field *means* in its domain context.
-
----
-
-## 2. Vision
-
-> *"Developers should be able to declare the meaning of their data fields at schema time, and let the synchronization layer honor that meaning during conflict resolution — without writing custom merge logic for every field."*
-
-SemanticSync allows developers to annotate their existing SQLite schemas with semantic policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`) and immediately gain semantically correct conflict resolution — while keeping their existing SQL toolchain unchanged.
+**SemanticSync is a declarative semantic synchronization middleware for replicated SQLite databases.** It allows developers to annotate relational columns with declarative merge policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`, `MIN`, `MAX`) that preserve business intent during reconciliation, while keeping standard SQL queries and local SQLite engines completely unchanged.
 
 ---
 
-## 3. Goals
+## 2. Core Pillars & Architectural Principles
 
-| Goal | Priority |
-|---|---|
-| Provide schema-level semantic conflict resolution for SQLite | P0 |
-| Remain domain-agnostic in the engine layer | P0 |
-| Integrate with existing SQLite databases without schema migration | P0 |
-| Provide a developer workspace (SemanticSync Studio) for policy design | P1 |
-| Quantifiably demonstrate superiority over Generic LWW baseline via benchmark | P1 |
-| Support multi-replica (3+) synchronization scenarios | P1 |
-| Provide a SQL Console for replica state inspection | P2 |
-
-## 4. Non-Goals
-
-- SemanticSync is **not** a general-purpose distributed database.
-- SemanticSync does **not** replace application-level business logic.
-- SemanticSync does **not** support non-SQLite databases in v1.
-- SemanticSync is **not** a cloud sync service — it operates locally.
+1. **Standard SQLite & Plain SQL:** No proprietary database dialect. Applications continue using standard SQLite connections.
+2. **Domain-Independent Engine:** Core algorithms in `backend/engine/` operate exclusively on schema datatypes and explicit policy configurations. Zero business logic is hardcoded.
+3. **Fail-Fast Type Validation:** Incompatible policies (such as `AVG` on `TEXT`) are rejected with `HTTP 422` before runtime execution.
+4. **Deterministic Convergence:** Every policy operator is deterministic. Given identical inputs, all replicas compute identical outputs.
+5. **Safety by Default:** When automated resolution cannot be proven safe, the conflict is preserved in an unmerged `flagged` state for human review (`REJECT` policy).
 
 ---
 
-## 5. Target Users
+## 3. Phased Product Scope
 
-### Primary: Research / Academic
-- Distributed systems researchers studying conflict-free data structures, CRDT semantics, and local-first software patterns.
-- Graduate students implementing and evaluating sync middleware.
+### Phase 1: Core Correctness & Audit (Current Baseline)
+- Schema inspection via SQLite PRAGMAs (`INTEGER`, `REAL`, `TEXT`, `BLOB`, `NUMERIC`).
+- Policy validation with HTTP 422 error codes.
+- Deterministic 3-way cell-level resolution for UPDATE vs. UPDATE.
+- Pairwise HLC synchronization between two replicas.
+- FastAPI REST backend and React/Vite SemanticSync Studio.
 
-### Secondary: Developer Tools
-- Developers building offline-first, local-first, or edge-computing applications on SQLite.
-- Teams building collaborative desktop or mobile applications with shared data.
+### Phase 2: Full Row-Mutation Conflict Model
+- Detection and resolution of `INSERT vs INSERT` (PK & UNIQUE collisions).
+- Detection and resolution of `UPDATE vs DELETE` (Tombstone policies).
+- Safe handling of `DELETE vs DELETE` (Idempotent convergence).
+- Conflict durability and recovery.
 
----
+### Phase 3: Invariant Preservation & N-Replica Topologies
+- Implementation of `BOUNDED_SUM` policy with floor/ceiling invariant checks.
+- Verification of convergence across $N \ge 3$ replicas with varying synchronization orderings.
 
-## 6. User Stories
+### Phase 4: Scaled Empirical Benchmark Suite
+- Parameterized stress harness scaling from 9 scenarios to 1,000–10,000 operations.
+- Configurable conflict densities ($5\%, 20\%, 50\%$).
+- Automated computation and export of SCR, CR, p50/p95/p99 latency, and resolution overhead.
 
-### Core Engine
-- As a developer, I want to annotate my SQLite columns with semantic policies so that concurrent writes are reconciled according to domain meaning rather than arbitrary timestamp ordering.
-- As a developer, I want the engine to reject invalid policy assignments (e.g. `AVG` on a `TEXT` column) before runtime so I cannot misconfigure my schema.
-- As a developer, I want conflict resolution to be deterministic so that all replicas always converge to the same value given the same input.
+### Phase 5: Relational Foreign Key Integrity
+- Foreign-key orphan detection when parent rows are deleted while child rows are updated.
+- Non-destructive `_ss_quarantine` table routing to preserve database integrity.
 
-### Studio UI
-- As a developer, I want to browse my SQLite schema and assign policies column-by-column with visual validation feedback.
-- As a developer, I want to run SQL queries directly against any replica to inspect its state.
-- As a developer, I want to simulate a conflict by injecting divergent values into two replicas and watch the policy resolve it.
-- As a researcher, I want to run a benchmark comparing Generic LWW vs. SemanticSync across three domain workloads and see the Semantic Correctness Rate (SCR) for each.
+### Phase 6: Operational Log Compaction
+- Causal stability checkpointing to prune `_ss_change_log` without data loss.
 
----
-
-## 7. Requirements
-
-### Functional Requirements
-
-| ID | Requirement |
-|---|---|
-| FR-01 | Engine must support policies: `SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`, `MIN`, `MAX` |
-| FR-02 | Each policy must be validated for type compatibility before being applied |
-| FR-03 | `SUM` must implement additive delta reconciliation: `resolved = a + b - base` |
-| FR-04 | `AVG` must return exact arithmetic mean: `(a + b) / 2.0` |
-| FR-05 | `APPEND` must concatenate both values deterministically (ordered by replica_id) |
-| FR-06 | `LWW` must use Hybrid Logical Clock for ordering; deterministic tie-break via replica_id |
-| FR-07 | `REJECT` must flag conflict for manual review without mutating any replica |
-| FR-08 | All SQL operations must use parameterized queries (no string interpolation) |
-| FR-09 | Schema inspection must work via standard SQLite `PRAGMA table_info` |
-| FR-10 | API must return `HTTP 422` for invalid policy/type combinations |
-| FR-11 | Studio must display schema, policies, conflicts, and sync results |
-| FR-12 | Benchmark harness must produce Semantic Correctness Rate (SCR) metric |
-| FR-13 | System must support seeding 3 demo workloads: Inventory, Notes, Healthcare |
-
-### Non-Functional Requirements
-
-| ID | Requirement |
-|---|---|
-| NFR-01 | Policy resolution must be deterministic: same inputs always produce same output |
-| NFR-02 | Engine layer must contain zero domain-specific logic |
-| NFR-03 | API must start within 5 seconds |
-| NFR-04 | All tests must pass in < 5 seconds |
-| NFR-05 | No external cloud dependencies; operates fully offline |
-| NFR-06 | Python 3.10+ and Node.js 18+ compatibility |
-
----
-
-## 8. Success Criteria
-
-- **All 56+ automated tests passing** across schema inspection, policy validation, semantic resolution, sync convergence, and API contract.
-- **Semantic Correctness Rate (SCR) ≥ 90%** on benchmark workloads for SemanticSync vs ~33% for Generic LWW baseline.
-- **Zero domain logic in `backend/engine/`** — verified by code review.
-- **Swagger UI operational** at `/docs` for all API endpoints.
-- **SemanticSync Studio builds** and connects to the backend API.
+### Phase 7: Research Release & Studio Polish
+- Telemetry integration in Studio Analytics view, complete documentation package, and research manuscript.

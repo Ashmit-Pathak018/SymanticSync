@@ -310,6 +310,19 @@ export function SyncHub() {
             </Alert>
           )}
 
+          {syncResult?.skipped_tables?.length > 0 && (
+            <Alert variant="warning" title="Some Tables Were Not Synchronized">
+              Unsupported tables with composite or missing primary keys: {syncResult.skipped_tables.join(', ')}.
+              These tables were skipped and need a single-column primary key before SemanticSync can process them.
+            </Alert>
+          )}
+
+          {syncResult?.rejected_operations?.length > 0 && (
+            <Alert variant="warning" title="Some Operations Were Held">
+              {syncResult.rejected_operations.length} operation(s) were not applied because their causal prerequisites or expected row state did not match. Retry after synchronizing prerequisites or review the listed operations.
+            </Alert>
+          )}
+
           {/* Sync Result Card */}
           {syncResult && (
             <Card title="Synchronization Execution Outcome" className="border-success/40">
@@ -338,7 +351,9 @@ export function SyncHub() {
 
               <div className="text-xs text-text-muted mb-2 font-mono flex items-center justify-between">
                 <span>Execution Duration: {syncResult.duration_ms?.toFixed(2)} ms</span>
-                <span className="text-success font-semibold">Converged to Deterministic State</span>
+                <span className={syncResult.skipped_tables?.length || syncResult.rejected_operations?.length ? 'text-warning font-semibold' : 'text-success font-semibold'}>
+                  {syncResult.rejected_operations?.length ? 'Completed with Held Operations' : syncResult.skipped_tables?.length ? 'Completed with Unsupported Tables' : 'Sync Completed'}
+                </span>
               </div>
 
               {/* Applied Changes List */}
@@ -368,7 +383,9 @@ export function SyncHub() {
                 </div>
               ) : (
                 <div className="p-4 text-center text-xs text-text-muted bg-gray-50 rounded-lg">
-                  Replicas were already identical. Zero divergences found.
+                  {syncResult.skipped_tables?.length
+                    ? 'No supported changes were applied. Review the unsupported-table warning above.'
+                    : 'Replicas were already identical. Zero divergences found.'}
                 </div>
               )}
             </Card>

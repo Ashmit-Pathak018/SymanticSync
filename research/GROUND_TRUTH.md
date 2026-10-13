@@ -1,59 +1,52 @@
-# SemanticSync — Ground Truth Conflict Specifications
+# SemanticSync — Benchmark Ground Truths
 
-**Version:** 1.0
-
----
-
-## 1. Overview
-
-To evaluate synchronization algorithms scientifically, ground truth must be explicitly predefined. A ground-truth tuple is defined as:
-
-$$\mathcal{GT} = \langle T, R_{id}, C, V_{\text{base}}, V_A, V_B, V_{\text{expected\_semantic}}, V_{\text{expected\_baseline}} \rangle$$
-
-Where:
-- $T$: Table name
-- $R_{id}$: Target row primary key
-- $C$: Target column name
-- $V_{\text{base}}$: Common ancestor value
-- $V_A, V_B$: Divergent replica mutations
-- $V_{\text{expected\_semantic}}$: The semantically correct outcome
-- $V_{\text{expected\_baseline}}$: Standard Last-Write-Wins outcome ($V_B$ assuming $T_B > T_A$)
+**Version:** 2.0 (Reconciled)  
+**Status:** Implementation-Ready Specification
 
 ---
 
-## 2. Workload Ground Truth Tables
+## 1. Overview & Definition
+
+A ground-truth conflict record establishes the objectively expected domain outcome when two replicas concurrently diverge from an ancestor base snapshot:
+
+$$\mathcal{GT} = \langle \text{table}, \text{row\_id}, \text{column}, V_{\text{base}}, V_A, V_B, \text{Policy}, V_{\text{expected\_semantic}}, V_{\text{expected\_baseline}} \rangle$$
+
+---
+
+## 2. Verified Test Scenarios
 
 ### Workload 1: Inventory (`InventoryWorkload`)
 
-| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) |
-|---|---|---|---|---|---|---|---|
-| `1` | `quantity` | `SUM` | `100` | `115` (+15) | `120` (+20) | `135` | `120` *(Data Loss: -15)* |
-| `1` | `description` | `APPEND` | `'Original description'` | `'Original description. Note from A.'` | `'Original description. Note from B.'` | Concatenated both contributions | `'Original description. Note from B.'` *(Overwrite)* |
-| `1` | `sku` | `REJECT` | `'SKU-001'` | `'SKU-UPDATED'` | `'SKU-001'` | `'FLAGGED'` *(Manual Review Required)* | `'SKU-001'` *(Silently overwritten)* |
+| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) | Rationale |
+|---|---|---|---|---|---|---|---|---|
+| `1` | `quantity` | `SUM` | `100` | `115` (+15) | `120` (+20) | `135` | `120` | Additive delta merge: $100 + 15 + 20 = 135$. Baseline overwrites A's sale. |
+| `1` | `description` | `APPEND` | `'Original description'` | `'Original description. Note from A.'` | `'Original description. Note from B.'` | Both notes preserved with delimiter | Only Note from B preserved | Both contributors' annotations must be preserved. Baseline truncates A. |
+| `1` | `sku` | `REJECT` | `'SKU-001'` | `'SKU-UPDATED'` | `'SKU-001'` | `'FLAGGED'` | `'SKU-001'` | SKU is an invariant key. Automated overwrite is forbidden. |
 
 ---
 
-### Workload 2: Collaborative Notes (`NotesWorkload`)
+### Workload 2: Notes (`NotesWorkload`)
 
-| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) |
-|---|---|---|---|---|---|---|---|
-| `1` | `edit_count` | `SUM` | `5` | `6` (+1) | `7` (+2) | `8` | `7` *(Lost edit tick)* |
-| `1` | `body` | `APPEND` | `'Initial draft.'` | `'Initial draft. Added section 1.'` | `'Initial draft. Added section 2.'` | Both sections preserved with delimiter | Only section 2 preserved |
-| `1` | `author` | `REJECT` | `'Author Alice'` | `'Author Bob'` | `'Author Alice'` | `'FLAGGED'` | `'Author Alice'` |
-
----
-
-### Workload 3: Healthcare Telemetry (`HealthWorkload`)
-
-| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) |
-|---|---|---|---|---|---|---|---|
-| `1` | `heart_rate` | `AVG` | `72` | `75` | `69` | `72.0` | `69` *(Arbitrary sensor pick)* |
-| `1` | `clinical_notes`| `APPEND`| `'Admitted.'` | `'Admitted. Note from Nurse.'` | `'Admitted. Note from Doctor.'`| Concatenated clinical remarks | Only Doctor note preserved |
-| `1` | `blood_type` | `REJECT` | `'O+'` | `'AB+'` | `'O+'` | `'FLAGGED'` *(Safety stop)* | `'O+'` |
+| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) | Rationale |
+|---|---|---|---|---|---|---|---|---|
+| `1` | `edit_count` | `SUM` | `5` | `6` (+1) | `7` (+2) | `8` | `7` | Edit counters represent independent increments: $5 + 1 + 2 = 8$. |
+| `1` | `body` | `APPEND` | `'Initial draft.'` | `'Initial draft. Added section 1.'` | `'Initial draft. Added section 2.'` | Both sections preserved with delimiter | Only section 2 preserved | Preserves both authors' concurrent section additions. |
+| `1` | `author` | `REJECT` | `'Author Alice'` | `'Author Bob'` | `'Author Alice'` | `'FLAGGED'` | `'Author Alice'` | Authorship attribution is immutable; conflict flagged for triage. |
 
 ---
 
-## 3. Scoring Rules for Evaluation
+### Workload 3: Healthcare (`HealthWorkload`)
 
-1. **Value Match:** A resolution is marked correct if and only if $\text{result} = V_{\text{expected}}$.
-2. **Safety Stop Handling (`REJECT`):** For safety-critical columns governed by `REJECT`, a resolution is deemed correct if the system sets status to `'flagged'`, assigns no automated mutation, and registers the conflict for human triage (`"FLAGGED"` token in evaluation scoring).
+| Row ID | Column | Policy | Base Value ($V_{\text{base}}$) | Replica A ($V_A$) | Replica B ($V_B$) | Expected Semantic ($V_{\text{semantic}}$) | Expected Baseline ($V_{\text{baseline}}$) | Rationale |
+|---|---|---|---|---|---|---|---|---|
+| `1` | `heart_rate` | `AVG` | `72` | `75` | `69` | `72.0` | `69` | Arithmetic mean of sensor telemetries: $(75 + 69) / 2 = 72.0$. |
+| `1` | `clinical_notes`| `APPEND`| `'Admitted.'` | `'Admitted. Note from Nurse.'` | `'Admitted. Note from Doctor.'`| Both clinical observations preserved | Only Doctor note preserved | Medical observation safety: never discard nurse observation. |
+| `1` | `blood_type` | `REJECT` | `'O+'` | `'AB+'` | `'O+'` | `'FLAGGED'` | `'O+'` | Blood type is life-critical invariant. Automated resolution is unsafe. |
+
+---
+
+## 3. Evaluation Rules for Benchmark Scorer
+
+1. **Exact Numeric Equality:** Scalar values must match precisely ($135 = 135$, $8 = 8$, $72.0 = 72.0$).
+2. **Text Containment:** For `APPEND`, the merged string must contain the unique textual additions from both replicas.
+3. **Safety Flag Match:** For `REJECT`, the system must return `status = "flagged"`, `resolved_value = None`, and register the conflict in `MergeManager`. Baseline LWW never flags conflicts (it always selects a winner), so baseline score on `REJECT` scenarios is strictly $0\%$.
