@@ -92,6 +92,20 @@ def test_benchmark_endpoint(client):
     assert metrics["total_conflicts_evaluated"] >= 3
 
 
+def test_benchmark_artifacts_endpoints(client):
+    r_list = client.get("/api/v1/benchmark/artifacts")
+    assert r_list.status_code == 200
+    artifacts = r_list.json()
+    assert isinstance(artifacts, list)
+    if artifacts:
+        first = artifacts[0]
+        assert "filename" in first
+        assert "format" in first
+        r_dl = client.get(f"/api/v1/benchmark/artifacts/{first['filename']}")
+        assert r_dl.status_code == 200
+
+
+
 def test_conflicts_resolve_api_endpoint(client, tmp_path, monkeypatch):
     import sqlite3
     from backend.api.state import app_state

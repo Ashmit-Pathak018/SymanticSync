@@ -292,6 +292,4 @@ def file_sha256(path: str | Path) -> str:
     with Path(path).open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()
-
-\n
+    return digest.hexdigest()

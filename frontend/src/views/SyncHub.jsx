@@ -29,9 +29,17 @@ export function SyncHub() {
   const [replicas, setReplicas] = useState([]);
   const [replicaA, setReplicaA] = useState('');
   const [replicaB, setReplicaB] = useState('');
+  const [tombstonePolicy, setTombstonePolicy] = useState('FLAG_FOR_REVIEW');
   const [runningSync, setRunningSync] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState(null);
+
+  // Checkpoint & Compaction state
+  const [compacting, setCompacting] = useState(false);
+  const [compactResult, setCompactResult] = useState(null);
+  const [compactError, setCompactError] = useState(null);
+  const [initializingStore, setInitializingStore] = useState(false);
+  const [storeFeedback, setStoreFeedback] = useState(null);
 
   // Controlled conflict generation state
   const [genTable, setGenTable] = useState('products');
@@ -101,13 +109,54 @@ export function SyncHub() {
     setSyncError(null);
 
     try {
-      const res = await api.runSync(selectedDb, replicaA, replicaB);
+      const res = await api.runSync(selectedDb, replicaA, replicaB, tombstonePolicy);
       setSyncResult(res);
       await refreshState();
     } catch (err) {
       setSyncError(err.data?.detail || err.message);
     } finally {
       setRunningSync(false);
+    }
+  };
+
+  const handleInitStore = async () => {
+    setInitializingStore(true);
+    setStoreFeedback(null);
+    try {
+      const res = await api.initCheckpointStore();
+      setStoreFeedback({
+        type: res.status === 'ready' ? 'success' : 'error',
+        message: res.status === 'ready'
+          ? `Checkpoint store provisioned successfully (Store ID: ${res.store_id || 'active'}).`
+          : `Checkpoint store initialization blocked: ${res.reason || 'Safety criteria not met.'}`,
+      });
+      await refreshState();
+    } catch (err) {
+      setStoreFeedback({
+        type: 'error',
+        message: err.data?.detail || err.message,
+      });
+    } finally {
+      setInitializingStore(false);
+    }
+  };
+
+  const handleCompact = async () => {
+    if (!selectedDb) {
+      alert('Please select a database workspace first.');
+      return;
+    }
+    setCompacting(true);
+    setCompactResult(null);
+    setCompactError(null);
+    try {
+      const res = await api.compactSyncLogs(selectedDb);
+      setCompactResult(res);
+      await refreshState();
+    } catch (err) {
+      setCompactError(err.data?.detail || err.message);
+    } finally {
+      setCompacting(false);
     }
   };
 
@@ -287,6 +336,24 @@ export function SyncHub() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-text-primary mb-1">
+                  Tombstone Merge Policy (Concurrent Delete/Update)
+                </label>
+                <select
+                  value={tombstonePolicy}
+                  onChange={(e) => setTombstonePolicy(e.target.value)}
+                  className="w-full border border-border rounded-md px-3 py-2 text-text-primary bg-white focus:ring-1 focus:ring-primary focus:outline-hidden"
+                >
+                  <option value="FLAG_FOR_REVIEW">FLAG_FOR_REVIEW (Hold for human decision)</option>
+                  <option value="DELETE_WINS">DELETE_WINS (Deletion takes precedence over update)</option>
+                  <option value="UPDATE_RESURRECTS">UPDATE_RESURRECTS (Update resurrects deleted record)</option>
+                </select>
+                <p className="text-[11px] text-text-muted mt-1">
+                  Governs how the resolver reconciles concurrent mutations where one replica modifies a row and another deletes it.
+                </p>
               </div>
 
               <Button
@@ -515,6 +582,151 @@ export function SyncHub() {
           </div>
         </div>
       </div>
+
+      {/* Operational Checkpoints & Causal Compaction Section */}
+      <Card
+        title="Operational Checkpoints & Causal Compaction"
+        subtitle="Manage durable epoch journals, track causal frontiers across enrolled replicas, and prune acknowledged operation logs safely."
+      >
+        <div className="space-y-4">
+          {/* Status Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="p-3 bg-gray-50 border border-border rounded-lg">
+              <span className="text-[10px] uppercase font-semibold text-text-muted">Journal Store Status</span>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge
+                  variant={
+                    syncStatus?.checkpoint_store?.status === 'ready'
+                      ? 'success'
+                      : syncStatus?.checkpoint_store?.status === 'blocked'
+                      ? 'danger'
+                      : 'warning'
+                  }
+                  size="md"
+                >
+                  {syncStatus?.checkpoint_store?.status?.toUpperCase() || 'UNINITIALIZED'}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 border border-border rounded-lg">
+              <span className="text-[10px] uppercase font-semibold text-text-muted">Store ID</span>
+              <div className="text-xs font-mono font-bold text-text-primary mt-1 truncate">
+                {syncStatus?.checkpoint_store?.store_id || 'Not Adopted'}
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 border border-border rounded-lg">
+              <span className="text-[10px] uppercase font-semibold text-text-muted">Stable Horizon</span>
+              <div className="text-xs font-mono font-bold text-text-primary mt-1">
+                {compactResult?.stable_horizon
+                  ? `[${compactResult.stable_horizon.join(', ')}]`
+                  : syncStatus?.checkpoint_store?.stable_horizon
+                  ? `[${syncStatus.checkpoint_store.stable_horizon.join(', ')}]`
+                  : 'No Compaction Horizon'}
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 border border-border rounded-lg">
+              <span className="text-[10px] uppercase font-semibold text-text-muted">Enrolled Replicas</span>
+              <div className="text-xs font-bold text-text-primary mt-1">
+                {replicas.length} Active / {syncStatus?.registered_replicas || 0} Registered
+              </div>
+            </div>
+          </div>
+
+          {/* Feedback Alerts */}
+          {storeFeedback && (
+            <Alert
+              variant={storeFeedback.type === 'success' ? 'success' : 'danger'}
+              title={storeFeedback.type === 'success' ? 'Store Initialized' : 'Store Initialization Issue'}
+            >
+              {storeFeedback.message}
+            </Alert>
+          )}
+
+          {compactError && (
+            <Alert variant="danger" title="Compaction Error">
+              {compactError}
+            </Alert>
+          )}
+
+          {compactResult && (
+            <div>
+              {compactResult.status === 'blocked' ? (
+                <Alert variant="danger" title="Compaction Blocked (Safety Invariant Protected)">
+                  Causal compaction was blocked by the safety boundary. Reason: <strong>{compactResult.reason}</strong>.
+                  SemanticSync prevents compaction when unacknowledged operations exist or replica frontiers disagree.
+                </Alert>
+              ) : compactResult.status === 'retained' ? (
+                <Alert variant="warning" title="Operations Retained (Safety Invariant Protected)">
+                  No operations pruned: {compactResult.reason || 'Missing ACK from enrolled replicas'}. Full change logs remain intact.
+                </Alert>
+              ) : (
+                <Alert variant="success" title="Causal Compaction Completed">
+                  Successfully pruned <strong>{compactResult.pruned || 0}</strong> acknowledged operations across enrolled replicas.
+                  {compactResult.stable_horizon && ` Causal horizon established at [${compactResult.stable_horizon.join(', ')}].`}
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* Blocked Checkpoints List if present */}
+          {((syncStatus?.checkpoint_store?.blocked_checkpoints && syncStatus.checkpoint_store.blocked_checkpoints.length > 0) ||
+            (compactResult?.blocked_checkpoints && compactResult.blocked_checkpoints.length > 0)) && (
+            <div className="border border-danger/40 bg-rose-50/30 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-danger font-semibold text-xs mb-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Blocked Checkpoint Records ({
+                  (compactResult?.blocked_checkpoints || syncStatus?.checkpoint_store?.blocked_checkpoints).length
+                })</span>
+              </div>
+              <p className="text-[11px] text-text-secondary mb-2">
+                The following checkpoints could not be resumed or compacted due to precondition mismatches or missing causal dependencies:
+              </p>
+              <div className="space-y-2">
+                {(compactResult?.blocked_checkpoints || syncStatus?.checkpoint_store?.blocked_checkpoints).map((b, idx) => (
+                  <div key={idx} className="bg-white border border-border p-2.5 rounded text-xs font-mono">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-text-primary">
+                      <span>Checkpoint ID: {b.checkpoint_id}</span>
+                      <Badge variant="danger" size="sm">BLOCKED</Badge>
+                    </div>
+                    <div className="text-[11px] text-danger mt-1">Reason: {b.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              onClick={handleInitStore}
+              loading={initializingStore}
+              icon={ShieldCheck}
+            >
+              {syncStatus?.checkpoint_store?.status === 'ready'
+                ? 'Revalidate / Adopt Checkpoint Store'
+                : 'Initialize Checkpoint Store'}
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleCompact}
+              loading={compacting}
+              disabled={!selectedDb || syncStatus?.checkpoint_store?.status === 'blocked'}
+              icon={Layers}
+            >
+              Run Causal Compaction
+            </Button>
+
+            <span className="text-[11px] text-text-muted">
+              Compaction safely snapshots state and truncates acknowledged operations up to the common ACK horizon.
+            </span>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
