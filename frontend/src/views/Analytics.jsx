@@ -635,11 +635,11 @@ export function Analytics() {
                 </Card>
 
                 <Card className="p-3 text-center">
-                  <span className="text-[10px] uppercase font-bold text-text-muted">Avg Overhead</span>
+                  <span className="text-[10px] uppercase font-bold text-text-muted">Net Sync Δ</span>
                   <div className="text-lg font-bold text-text-primary font-mono mt-1">
                     {stressMetrics.resolution_overhead_ms !== undefined ? `${stressMetrics.resolution_overhead_ms.toFixed(3)} ms` : 'N/A'}
                   </div>
-                  <span className="text-[10px] text-text-muted">Per conflict</span>
+                  <span className="text-[10px] text-text-muted">Semantic batch − LWW batch</span>
                 </Card>
 
                 <Card className="p-3 text-center">
