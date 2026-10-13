@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.api.models import QueryRequest, QueryResult
 from backend.api.state import app_state
+from backend.engine.fk_quarantine import connect_with_foreign_keys
 
 router = APIRouter(tags=["Query"])
 
@@ -27,6 +28,10 @@ def execute_query(body: QueryRequest) -> QueryResult:
     """
     Execute standard SQLite SQL (SELECT, INSERT, UPDATE, PRAGMA, EXPLAIN).
     Target can be the registered base database or any of its replicas.
+
+    SQL-console writes are intentionally outside tracked replication and
+    checkpoint locking: they do not create operation identities or quarantine
+    records. They are an unsupported mutation path for replica convergence.
     """
     db_path = None
     if body.replica_id:
@@ -42,10 +47,12 @@ def execute_query(body: QueryRequest) -> QueryResult:
     sql = body.sql.strip()
     if not sql:
         raise HTTPException(status_code=400, detail="SQL query string cannot be empty.")
+    if sql.lstrip().casefold().startswith("pragma foreign_keys"):
+        raise HTTPException(status_code=400, detail="Foreign-key enforcement cannot be disabled through the SQL console.")
 
     t0 = time.perf_counter()
     try:
-        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn = connect_with_foreign_keys(db_path, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute(sql)
 

@@ -22,6 +22,7 @@ from backend.api.routes_sync import router as sync_router
 from backend.api.routes_query import router as query_router
 from backend.api.routes_benchmark import router as benchmark_router
 from backend.api.routes_seed import router as seed_router
+from backend.api.routes_quarantine import router as quarantine_router
 from backend.api.state import DATA_DIR, app_state
 
 
@@ -67,6 +68,7 @@ app.include_router(sync_router, prefix="/api/v1")
 app.include_router(query_router, prefix="/api/v1")
 app.include_router(benchmark_router, prefix="/api/v1")
 app.include_router(seed_router, prefix="/api/v1")
+app.include_router(quarantine_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health")

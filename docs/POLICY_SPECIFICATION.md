@@ -134,13 +134,13 @@ In SemanticSync, policies fall into three distinct formal categories:
 
 ---
 
-### 2.7 `BOUNDED_SUM` (Phase 3 Specification)
+### 2.7 `BOUNDED_SUM` (Phase 3 Implementation)
 
 - **Compatible Types:** `INTEGER`, `REAL`, `NUMERIC`
-- **Intended Semantics:**
-  - Evaluates standard additive delta: $V_{\text{target}} = V_{\text{base}} + \Delta_A + \Delta_B$.
-  - Evaluates explicit invariant condition: $V_{\text{target}} \ge \text{min\_bound}$ (e.g., $0$ for inventory).
-  - **Safety Rule:** If $V_{\text{target}} < \text{min\_bound}$, the resolver does NOT write back a negative value. It marks status as `flagged` with error `INVARIANT_VIOLATION: Bound underflow`.
+- **Configuration:** `BOUNDED_SUM[min=<finite number>,max=<finite number>]`; both bounds are inclusive and `min <= max`.
+- **Tracked semantics:** Each accepted tracked update records its signed delta and bounds with a stable operation ID. Sync deduplicates by ID and applies a delta only when the current value and result remain within bounds.
+- **Unsafe merge behavior:** The resolver flags a combined out-of-bound result with an explanation. The synchronizer does not clamp or receipt an unsafe received delta; it stays pending in the source log and is returned to the caller as rejected/pending.
+- **Evidence boundary:** Tests cover selected N=3/5 schedules, duplicates, reversed delivery, and restart. This is not a general convergence guarantee. Direct SQL bypasses tracked bound validation and operation identity.
 
 ---
 
@@ -154,5 +154,6 @@ In SemanticSync, policies fall into three distinct formal categories:
 | **LWW** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible |
 | **REJECT** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible | ✅ Compatible |
 | **MIN / MAX** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
+| **BOUNDED_SUM** | ✅ Compatible | ✅ Compatible | ✅ Compatible | ❌ `TYPE_INCOMPATIBLE` | ❌ `TYPE_INCOMPATIBLE` |
 
 Incompatible configurations are caught by `PolicyValidator` and return `HTTP 422 Unprocessable Entity` with a descriptive message before runtime synchronization.

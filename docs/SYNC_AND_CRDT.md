@@ -107,10 +107,11 @@ CREATE TABLE IF NOT EXISTS _ss_change_log (
 - **`DELETE`:** `new_value` is `NULL`, acts as an explicit persistent tombstone.
 
 ### Log Lifecycle & Pruning Constraints (Phase 6)
-- **Current Behavior:** Log entries accumulate indefinitely for each tracked write.
-- **Safety Pruning Rule:** Changes **must never** be pruned simply because one replica has read them. Pruning requires a **Causal Stability Check**:
+- **Acknowledgement evidence:** The API sync route persists exact origin IDs observed in each enrolled replica's durable change log, along with source ID/sequence and HLC. An absent vector is not an empty successful ACK; it blocks compaction.
+- **Safety Pruning Rule:** Changes **must never** be pruned simply because one replica has read them. Pruning requires exact acknowledgement by every enrolled replica and a **Causal Stability Check**:
   $$\text{Stable Timestamp } T_{\text{stable}} = \min_{r \in \text{Replicas}} \text{AckTimestamp}(r)$$
-  Only entries with $\text{HLC} < T_{\text{stable}}$ across all enrolled replicas can be compacted into base snapshots.
+-  Only dependency-closed entries with exact IDs acknowledged by all enrolled replicas and $\text{HLC} < T_{\text{stable}}$ can leave `_ss_change_log`. The HLC cutoff alone is never proof of receipt. The transaction stores compact receipt/dependency/hash metadata used by replay dedupe and conflict detection.
+- **Membership/recovery:** Stale or newly enrolled replicas with no ACK vector pin the horizon. After prior compaction, the API creates a new replica from an enrolled replica's current materialized snapshot; direct engine callers must do the same. The shared ancestor DB is not rewritten, because it is still the baseline for three-way conflict detection. Receipt metadata does not retain full historical payloads, and AppState remains single-process local storage.
 
 ---
 

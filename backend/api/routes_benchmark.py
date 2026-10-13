@@ -17,12 +17,18 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from backend.api.models import BenchmarkMetrics, BenchmarkRequest
+from backend.api.models import (
+    BenchmarkMetrics,
+    BenchmarkRequest,
+    StressBenchmarkMetrics,
+    StressBenchmarkRequest,
+)
 from backend.api.state import app_state
 from backend.engine.semantic_resolver import SemanticResolver
 from backend.workloads.health_workload import HealthWorkload
 from backend.workloads.inventory_workload import InventoryWorkload
 from backend.workloads.notes_workload import NotesWorkload
+from backend.workloads.stress_harness import StressBenchmarkConfig, StressHarness
 
 router = APIRouter(tags=["Benchmark"])
 
@@ -133,3 +139,36 @@ def get_metrics() -> dict[str, Any]:
         "total_workloads_evaluated": len(app_state.metrics),
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+
+
+@router.post("/benchmark/stress", response_model=StressBenchmarkMetrics, status_code=200)
+def run_stress_benchmark(body: StressBenchmarkRequest) -> StressBenchmarkMetrics:
+    """
+    Run scaled parametric stress benchmark (1,000 to 10,000 operations).
+    Evaluates SCR, CR, p50/p95/p99 latency, resolution overhead, and exports artifacts.
+    """
+    if body.num_operations not in (1000, 5000, 10000):
+        raise HTTPException(
+            status_code=400,
+            detail="num_operations must be a positive integer, typically 1000, 5000, or 10000.",
+        )
+    if body.conflict_density not in (0.05, 0.20, 0.50):
+        raise HTTPException(
+            status_code=400,
+            detail="conflict_density must be 0.05, 0.20, or 0.50.",
+        )
+
+    out_dir = str(app_state.data_dir / "benchmarks") if body.export_artifacts else None
+    cfg = StressBenchmarkConfig(
+        num_operations=body.num_operations,
+        conflict_density=body.conflict_density,
+        seed=body.seed,
+        output_dir=out_dir,
+    )
+    harness = StressHarness(cfg)
+    result = harness.run_benchmark()
+
+    # Cache latest stress result
+    app_state.set_metrics("stress_latest", result.to_dict())
+
+    return StressBenchmarkMetrics(**result.to_dict())

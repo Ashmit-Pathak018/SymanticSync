@@ -32,6 +32,8 @@ from backend.api.models import (
 from backend.api.state import app_state
 from backend.engine.schema_inspector import SchemaInspector
 from backend.engine.crdt_sync import CRDTSyncEngine
+from backend.engine.fk_quarantine import connect_with_foreign_keys
+from backend.engine.mutation_lock import serialized_mutation
 
 router = APIRouter(tags=["Databases"])
 _sync_engine = CRDTSyncEngine()
@@ -170,6 +172,7 @@ class _ReplicaCreateRequest(_BM):
     response_model=ReplicaInfo,
     status_code=201,
 )
+@serialized_mutation
 def create_replica(db_id: str, body: _ReplicaCreateRequest) -> ReplicaInfo:
     """
     Create a replica of the registered database.
@@ -186,8 +189,28 @@ def create_replica(db_id: str, body: _ReplicaCreateRequest) -> ReplicaInfo:
     if not replica_id:
         raise HTTPException(status_code=400, detail="replica_id must not be empty.")
 
+    # When logs have been compacted, seed from a registered replica's
+    # materialized checkpoint so the new member does not miss pruned history.
+    snapshot_path = None
+    for enrolled in app_state.list_replicas_for_db(db_id):
+        with connect_with_foreign_keys(enrolled["db_path"]) as conn:
+            has_checkpoint = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='_ss_compacted_receipts'"
+            ).fetchone()
+            has_marker = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='_ss_checkpoint_metadata'"
+            ).fetchone()
+            if (has_checkpoint and conn.execute("SELECT 1 FROM _ss_compacted_receipts LIMIT 1").fetchone()) or (
+                has_marker and conn.execute("SELECT 1 FROM _ss_checkpoint_metadata LIMIT 1").fetchone()
+            ):
+                snapshot_path = enrolled["db_path"]
+                break
+
     try:
-        replica_path = _sync_engine.create_replica(info["path"], replica_id)
+        engine = CRDTSyncEngine(info["path"])
+        replica_path = engine.create_replica(replica_id, snapshot_path=snapshot_path)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

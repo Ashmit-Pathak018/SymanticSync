@@ -55,16 +55,16 @@
 
 ## ADR-006: Bounded Additive Operations (`BOUNDED_SUM`) (Phase 3)
 
-- **Status:** Accepted for Phase 3 Implementation
+- **Status:** Implemented for the verified Phase 3 scope; see traceability and limitations for evidence boundaries.
 - **Context:** Unbounded additive deltas in inventory or financial accounts risk underflow (e.g., stock dropping below zero).
-- **Decision:** Introduce `BOUNDED_SUM` policy with explicit boundary checks. If concurrent deltas breach the boundary, flag the conflict for review rather than writing a negative balance.
-- **Rationale:** Prevents inventory corruption without requiring full two-phase commit.
+- **Decision:** `BOUNDED_SUM[min=...,max=...]` enforces explicit inclusive bounds on tracked signed deltas. If a combined candidate breaches either bound, flag it and keep the received operation pending; never clamp or write the out-of-bound value.
+- **Rationale:** Prevents tracked operations from materializing an out-of-bound value. Tests cover selected N=3/5 mesh schedules only; they do not establish general convergence, and direct SQL bypasses tracked validation.
 
 ---
 
 ## ADR-007: Causal Stability Checkpoint for Log Pruning (Phase 6)
 
-- **Status:** Accepted for Phase 6 Implementation
+- **Status:** Partial implementation; Phase 6 acceptance review pending
 - **Context:** `_ss_change_log` grows monotonically over time. Pruning too early breaks replication for lagging replicas.
-- **Decision:** Prune changes only when their HLC timestamp is strictly less than the minimum acknowledged timestamp across all enrolled replicas ($T < \min_{r} T_{\text{ack}}(r)$).
-- **Rationale:** Guarantees that no replica is permanently desynchronized by premature log truncation.
+- **Decision:** Prune only dependency-closed operations whose exact stable IDs are acknowledged by every currently enrolled replica and whose HLC is strictly less than $\min_{r} T_{\text{ack}}(r)$. HLC alone never proves delivery. Preserve compact identity/sequence/dependency/hash metadata. Keep missing-ACK entries.
+- **Rationale:** Exact ID evidence makes the scalar horizon a cutoff, not a substitute for causal receipt. API replicas created after compaction are copied from a current enrolled replica; the shared ancestor is unchanged. This is a safe tested implementation subset, but it does not fulfill the planned full base/checkpoint snapshot and payload-history recovery criterion. Phase 6 remains partial until that deviation is approved or completed.

@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +45,7 @@ _EMPTY_REGISTRY: dict[str, Any] = {
     "policies": {},
     "conflicts": {},
     "metrics": {},
+    "replica_acks": {},
 }
 
 
@@ -60,6 +64,9 @@ class AppState:
         self.policies: dict[str, str] = {}     # "db_id:table:column" → policy_name
         self.conflicts: dict[str, dict] = {}   # conflict_id → conflict record dict
         self.metrics: dict[str, dict] = {}     # workload → BenchmarkMetrics dict
+        self.replica_acks: dict[str, dict[str, dict[str, dict]]] = {}
+        self.checkpoint_store_id: str | None = None
+        self.registry_load_error: str | None = None
 
     # ──────────────────────────────────────────────
     # Persistence
@@ -67,16 +74,32 @@ class AppState:
 
     def load(self) -> None:
         """Load state from disk.  Safe to call multiple times (idempotent)."""
+        self.registry_load_error = None
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         if REGISTRY_FILE.exists():
             try:
                 raw = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+                migrated_incarnations = False
                 with self._lock:
                     self.databases = raw.get("databases", {})
                     self.replicas = raw.get("replicas", {})
+                    for replica_id, replica in self.replicas.items():
+                        if isinstance(replica, dict):
+                            if not replica.get("incarnation_id"):
+                                replica["incarnation_id"] = str(uuid.uuid4())
+                                migrated_incarnations = True
                     self.policies = raw.get("policies", {})
                     self.conflicts = raw.get("conflicts", {})
                     self.metrics = raw.get("metrics", {})
+                    self.replica_acks = raw.get("replica_acks", {})
+                    self.checkpoint_store_id = raw.get("checkpoint_store_id")
+                if migrated_incarnations:
+                    try:
+                        self.save()
+                    except OSError:
+                        # Keep the valid loaded registry in memory. Compaction
+                        # explicitly retries this save before committing a manifest.
+                        pass
             except (json.JSONDecodeError, OSError):
                 # Corrupt file — reset to empty state but keep the file for inspection
                 with self._lock:
@@ -85,12 +108,22 @@ class AppState:
                     self.policies = {}
                     self.conflicts = {}
                     self.metrics = {}
+                    self.replica_acks = {}
+                    self.checkpoint_store_id = None
+                    self.registry_load_error = "registry JSON is corrupt or unreadable"
         else:
-            # First run — write an empty registry
-            self.save()
+            # Do not replace a missing registry when a checkpoint store may
+            # contain the only durable membership/history record.
+            if (DATA_DIR / "checkpoint_store.sqlite").exists():
+                self.registry_load_error = "registry is missing while checkpoint history may exist"
+            else:
+                # First run — write an empty registry.
+                self.save()
 
     def save(self) -> None:
         """Persist current state to disk."""
+        if self.registry_load_error:
+            raise RuntimeError("Registry is corrupt; refusing to overwrite it automatically.")
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
             "databases": self.databases,
@@ -98,8 +131,42 @@ class AppState:
             "policies": self.policies,
             "conflicts": self.conflicts,
             "metrics": self.metrics,
+            "replica_acks": self.replica_acks,
+            "checkpoint_store_id": self.checkpoint_store_id,
         }
-        REGISTRY_FILE.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        temporary_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=DATA_DIR,
+                prefix=f".{REGISTRY_FILE.name}.", suffix=".tmp", delete=False,
+            ) as temporary:
+                temporary_path = temporary.name
+                json.dump(payload, temporary, indent=2, default=str)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            for attempt in range(10):
+                try:
+                    os.replace(temporary_path, REGISTRY_FILE)
+                    break
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.05)
+        except Exception:
+            if temporary_path and os.path.exists(temporary_path):
+                try:
+                    os.unlink(temporary_path)
+                except Exception:
+                    pass
+            raise
+
+    def set_checkpoint_store_id(self, store_id: str) -> None:
+        """Persist the checkpoint-store identity used to detect loss/corruption."""
+        with self._lock:
+            if self.checkpoint_store_id not in (None, store_id):
+                raise ValueError("A different checkpoint store is already registered.")
+            self.checkpoint_store_id = store_id
+            self.save()
 
     # ──────────────────────────────────────────────
     # Database helpers
@@ -154,6 +221,11 @@ class AppState:
         rec = dict(info) if info else {}
         rec.update(kwargs)
         rec.setdefault("replica_id", replica_id)
+        prior = self.replicas.get(replica_id)
+        if prior and prior.get("db_path") == rec.get("db_path"):
+            rec.setdefault("incarnation_id", prior.get("incarnation_id") or str(uuid.uuid4()))
+        else:
+            rec.setdefault("incarnation_id", str(uuid.uuid4()))
         if "created_at" not in rec:
             import time
             rec["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -164,6 +236,68 @@ class AppState:
     def list_replicas_for_db(self, db_id: str) -> list[dict]:
         """Return all replicas that belong to *db_id*."""
         return [r for r in self.replicas.values() if r.get("parent_db_id") == db_id]
+
+    def record_replica_acknowledgements(
+        self, db_id: str, replica_id: str, operations: list[dict],
+    ) -> None:
+        """Persist exact operation receipts as this replica's acknowledgement vector."""
+        if not operations:
+            return
+        with self._lock:
+            db_existed = db_id in self.replica_acks
+            replica_existed = db_existed and replica_id in self.replica_acks[db_id]
+            vector = self.replica_acks.setdefault(db_id, {}).setdefault(replica_id, {})
+            previous = dict(vector)
+            try:
+                for operation in operations:
+                    operation_id = str(operation["operation_id"])
+                    vector[operation_id] = {
+                        "source_id": str(operation["source_id"]),
+                        "source_sequence": int(operation["source_sequence"]),
+                        "ts_pt": float(operation["ts_pt"]),
+                        "ts_l": int(operation["ts_l"]),
+                        "payload_hash": operation.get("payload_hash"),
+                    }
+                self.save()
+            except Exception:
+                # save() publishes via atomic replace. Restore the in-memory
+                # vector if publication fails so retries cannot mistake an
+                # unpersisted acknowledgement for durable evidence.
+                if replica_existed:
+                    vector.clear()
+                    vector.update(previous)
+                else:
+                    self.replica_acks[db_id].pop(replica_id, None)
+                    if not db_existed:
+                        self.replica_acks.pop(db_id, None)
+                raise
+
+    def durable_replica_ack_vector(self, db_id: str, replica_id: str) -> dict[str, dict]:
+        """Read one ACK vector from the atomically published registry file."""
+        if self.registry_load_error:
+            raise RuntimeError("Registry is corrupt; durable ACK evidence is unavailable.")
+        try:
+            raw = json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Registry cannot be read to verify durable ACK evidence.") from exc
+        if not isinstance(raw, dict) or not isinstance(raw.get("replica_acks", {}), dict):
+            raise RuntimeError("Registry ACK evidence has an invalid shape.")
+        db_vectors = raw.get("replica_acks", {}).get(db_id, {})
+        if not isinstance(db_vectors, dict):
+            raise RuntimeError(f"Registry ACK evidence is invalid for database {db_id}.")
+        vector = db_vectors.get(replica_id, {})
+        if not isinstance(vector, dict):
+            raise RuntimeError(f"Registry ACK evidence is invalid for replica {replica_id}.")
+        return vector
+
+    def replica_ack_vectors(self, db_id: str, replica_ids: list[str]) -> dict[str, dict]:
+        """Return vectors only when they cover the exact enrolled replica set."""
+        current_ids = {r["replica_id"] for r in self.list_replicas_for_db(db_id)}
+        requested = set(replica_ids)
+        stored = self.replica_acks.get(db_id, {})
+        if not requested or requested != current_ids or any(rid not in stored for rid in requested):
+            return {}
+        return {rid: dict(stored[rid]) for rid in requested}
 
     # ──────────────────────────────────────────────
     # Policy helpers
