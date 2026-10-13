@@ -51,7 +51,7 @@
 1. An attribute-level policy execution pipeline that computes commutative deltas from a verified common ancestor;
 2. A foreign-key quarantine boundary that preserves referential integrity by isolating orphaned child records rather than cascading unmonitored deletions; and
 3. A causal log compaction protocol backed by durable epoch checkpoint manifests and enrolled replica acknowledgement vectors.</p>
-<p>We empirically evaluate SemanticSync against a generic LWW baseline across both real-world domain workloads (inventory logistics, collaborative clinical records, and structured documents) and a 3×3 parametric stress matrix comprising 1,000 to 10,000 operations across 5% to 50% conflict densities. Across all configurations, while both generic CRDT baselines and SemanticSync achieve a 100.0% convergence rate, SemanticSync elevates the <strong>Semantic Correctness Rate (SCR)</strong> from 33.3%–42.5% under LWW to <strong>99.5%–100.0%</strong>, maintaining median per-conflict resolution overhead under 0.05 ms and p95 end-to-end sync latency below 4.0 ms.</p>
+<p>We empirically evaluate SemanticSync against a generic LWW baseline across both real-world domain workloads (inventory logistics, collaborative clinical records, and structured documents) and a 3×3 parametric stress matrix comprising 1,000 to 10,000 operations across 5% to 50% conflict densities. Across all configurations, while both generic CRDT baselines and SemanticSync achieve a 100.0% convergence rate, SemanticSync elevates the <strong>Semantic Correctness Rate (SCR)</strong> from 33.3%–42.5% under LWW to <strong>99.5%–100.0%</strong>, maintaining median per-conflict resolution overhead under 0.05 ms and p95 per-operation mutation-capture latency below 3.8 ms (with aggregate batch synchronization completing between 0.70 s and 94.01 s across all evaluated matrix scales).</p>
 <hr />
 <h2 id="1-introduction">1. Introduction</h2>
 <h3 id="11-the-local-first-relational-dilemma">1.1 The Local-First Relational Dilemma</h3>
@@ -238,7 +238,8 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <li><strong>Convergence Rate (CR):</strong> The proportion of replicas that achieve bit-for-bit identical database state across all tables post-sync.</li>
 <li><strong>Valid Resolution Accuracy (VRA):</strong> Percentage of conflict resolutions that satisfy domain range and referential integrity constraints.</li>
 <li><strong>Overhead per Conflict:</strong> The computational time (in milliseconds) expended executing policy resolution algorithms versus baseline raw memory assignment.</li>
-<li><strong>Latency Percentiles ($p50, p95, p99$):</strong> Per-operation mutation capture latency under concurrency (duration to execute local change and write to SQLite CDC trigger log). Total batch sync pass duration is tracked separately via total synchronization time.</li>
+<li><strong>Per-Operation Mutation Latency Percentiles ($p50, p95, p99$):</strong> Time required to apply an individual conflicting row mutation and record its CDC trigger entry into the replica's <code>_ss_change_log</code>. (Note: The benchmark harness measures per-operation mutation latency during contention rather than repeated end-to-end sync run distributions).</li>
+<li><strong>Aggregate Batch Synchronization Duration:</strong> Total wall-clock duration expended by the synchronization middleware to execute the three-way delta reconciliation pipeline across both replicas (<code>total_sync_time_ms</code>).</li>
 </ul>
 <h3 id="63-domain-workload-results">6.3 Domain Workload Results</h3>
 <table>
@@ -295,10 +296,11 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <th>Baseline SCR</th>
 <th>SemanticSync SCR</th>
 <th>SemanticSync VRA</th>
-<th>$p50$ Latency</th>
-<th>$p95$ Latency</th>
-<th>$p99$ Latency</th>
+<th>$p50$ Mutation Latency</th>
+<th>$p95$ Mutation Latency</th>
+<th>$p99$ Mutation Latency</th>
 <th>Overhead / Conflict</th>
+<th>Batch Sync Time</th>
 </tr>
 </thead>
 <tbody>
@@ -313,6 +315,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.75 ms</td>
 <td>4.02 ms</td>
 <td>0.031 ms</td>
+<td>0.70 s</td>
 </tr>
 <tr>
 <td><strong>1,000</strong></td>
@@ -325,6 +328,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.47 ms</td>
 <td>5.03 ms</td>
 <td>0.031 ms</td>
+<td>1.99 s</td>
 </tr>
 <tr>
 <td><strong>1,000</strong></td>
@@ -337,6 +341,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.42 ms</td>
 <td>4.19 ms</td>
 <td>0.034 ms</td>
+<td>4.53 s</td>
 </tr>
 <tr>
 <td><strong>5,000</strong></td>
@@ -349,6 +354,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.42 ms</td>
 <td>3.98 ms</td>
 <td>0.029 ms</td>
+<td>7.09 s</td>
 </tr>
 <tr>
 <td><strong>5,000</strong></td>
@@ -361,6 +367,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.57 ms</td>
 <td>4.51 ms</td>
 <td>0.032 ms</td>
+<td>16.10 s</td>
 </tr>
 <tr>
 <td><strong>5,000</strong></td>
@@ -373,6 +380,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.51 ms</td>
 <td>4.05 ms</td>
 <td>0.035 ms</td>
+<td>33.96 s</td>
 </tr>
 <tr>
 <td><strong>10,000</strong></td>
@@ -385,6 +393,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.62 ms</td>
 <td>4.29 ms</td>
 <td>0.030 ms</td>
+<td>24.29 s</td>
 </tr>
 <tr>
 <td><strong>10,000</strong></td>
@@ -397,6 +406,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.49 ms</td>
 <td>3.95 ms</td>
 <td>0.033 ms</td>
+<td>48.56 s</td>
 </tr>
 <tr>
 <td><strong>10,000</strong></td>
@@ -409,6 +419,7 @@ $$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
 <td>3.43 ms</td>
 <td>3.84 ms</td>
 <td>0.036 ms</td>
+<td>94.01 s</td>
 </tr>
 </tbody>
 </table>
@@ -422,7 +433,7 @@ SemanticSync Engine  : [██████████████████�
 <h3 id="65-key-findings">6.5 Key Findings</h3>
 <ol>
 <li><strong>Robust Semantic Accuracy Under Heavy Contention:</strong> As conflict density increases from 5% to 50%, baseline LWW correctness deteriorates linearly from 95.0% down to 50.0% due to silent overwrites of concurrent updates. In contrast, SemanticSync maintains an SCR above 98.8% across all 10,000-operation scenarios.</li>
-<li><strong>Sub-Linear Latency Scaling:</strong> Per-operation latency remains remarkably stable across 1,000 to 10,000 operation batches ($p50 \approx 3.0$ ms, $p95 &lt; 3.8$ ms, tail $p99 &lt; 5.1$ ms), confirming that the three-way delta reconciliation pipeline scales linearly with dataset size.</li>
+<li><strong>Predictable Per-Operation Mutation Capture:</strong> Individual mutation-capture latency percentiles remain constant across 1,000 to 10,000 operation batches ($p50 \approx 3.0$ ms, $p95 &lt; 3.8$ ms, tail $p99 &lt; 5.1$ ms), confirming that trigger-based CDC logging introduces zero progressive degradation. Aggregate batch synchronization scales predictably with conflict volume, from 0.70 s for 1,000 operations at 5% density to 94.01 s for 10,000 operations at 50% density.</li>
 <li><strong>Constant-Time Resolution Overhead:</strong> Attribute-level policy resolution introduces approximately 0.03 ms per conflict, confirming that semantic policy execution introduces virtually zero throughput penalty relative to standard SQLite transaction execution.</li>
 </ol>
 <hr />

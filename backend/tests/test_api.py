@@ -92,17 +92,91 @@ def test_benchmark_endpoint(client):
     assert metrics["total_conflicts_evaluated"] >= 3
 
 
-def test_benchmark_artifacts_endpoints(client):
+def test_benchmark_artifacts_empty_directory(client, tmp_path, monkeypatch):
+    """Deterministic test verifying empty artifact list when search directories contain no files."""
+    import backend.api.routes_benchmark as routes_bm
+
+    empty_dir = tmp_path / "empty_artifacts"
+    empty_dir.mkdir()
+    monkeypatch.setattr(routes_bm, "get_artifact_dirs", lambda: [empty_dir])
+
+    r_list = client.get("/api/v1/benchmark/artifacts")
+    assert r_list.status_code == 200
+    assert r_list.json() == []
+
+    # Downloading against empty directory must return 404
+    r_dl = client.get("/api/v1/benchmark/artifacts/benchmark_1000_20pct_42.json")
+    assert r_dl.status_code == 404
+
+
+def test_benchmark_artifacts_endpoints_deterministic(client, tmp_path, monkeypatch):
+    """Deterministic test for artifact listing and downloads using known JSON and CSV fixtures."""
+    import json
+    import backend.api.routes_benchmark as routes_bm
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+
+    # Create small known JSON artifact
+    json_filename = "benchmark_1000_20pct_42.json"
+    json_data = {
+        "num_operations": 1000,
+        "conflict_density": 0.20,
+        "seed": 42,
+        "semantic_sync_scr": 99.5,
+        "notes": "deterministic-test-fixture",
+    }
+    json_path = artifact_dir / json_filename
+    json_path.write_text(json.dumps(json_data), encoding="utf-8")
+
+    # Create small known CSV artifact
+    csv_filename = "benchmark_1000_20pct_42.csv"
+    csv_bytes = b"metric,value\nscr,99.5\np50,2.99\n"
+    csv_path = artifact_dir / csv_filename
+    csv_path.write_bytes(csv_bytes)
+
+    # Configure route to look exclusively at temporary artifact directory
+    monkeypatch.setattr(routes_bm, "get_artifact_dirs", lambda: [artifact_dir])
+
+    # 1. Assert artifact listing
     r_list = client.get("/api/v1/benchmark/artifacts")
     assert r_list.status_code == 200
     artifacts = r_list.json()
-    assert isinstance(artifacts, list)
-    if artifacts:
-        first = artifacts[0]
-        assert "filename" in first
-        assert "format" in first
-        r_dl = client.get(f"/api/v1/benchmark/artifacts/{first['filename']}")
-        assert r_dl.status_code == 200
+    assert len(artifacts) == 2
+    filenames = [a["filename"] for a in artifacts]
+    assert json_filename in filenames
+    assert csv_filename in filenames
+
+    json_meta = next(a for a in artifacts if a["filename"] == json_filename)
+    assert json_meta["format"] == "json"
+    assert json_meta["num_operations"] == 1000
+    assert json_meta["conflict_density_pct"] == 20
+    assert json_meta["seed"] == 42
+    assert json_meta["size_bytes"] == len(json.dumps(json_data).encode("utf-8"))
+
+    # 2. Assert JSON download: status code, content type, disposition, exact contents
+    r_json = client.get(f"/api/v1/benchmark/artifacts/{json_filename}")
+    assert r_json.status_code == 200
+    assert "application/json" in r_json.headers.get("content-type", "")
+    assert f'filename="{json_filename}"' in r_json.headers.get("content-disposition", "")
+    assert r_json.json() == json_data
+
+    # 3. Assert CSV download: status code, content type, disposition, exact contents
+    r_csv = client.get(f"/api/v1/benchmark/artifacts/{csv_filename}")
+    assert r_csv.status_code == 200
+    assert "text/csv" in r_csv.headers.get("content-type", "")
+    assert f'filename="{csv_filename}"' in r_csv.headers.get("content-disposition", "")
+    assert r_csv.content == csv_bytes
+
+    # 4. Assert 404 for non-existent file
+    r_404 = client.get("/api/v1/benchmark/artifacts/benchmark_9999_99pct_99.json")
+    assert r_404.status_code == 404
+    assert "not found" in r_404.json().get("detail", "").lower()
+
+    # 5. Assert 400 for path traversal
+    r_bad = client.get("/api/v1/benchmark/artifacts/..test.json")
+    assert r_bad.status_code == 400
+    assert "Invalid filename" in r_bad.json().get("detail", "")
 
 
 

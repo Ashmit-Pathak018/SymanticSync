@@ -431,10 +431,10 @@ export function Analytics() {
                     </div>
                   </div>
                   <div className="p-3 bg-white border border-border rounded-lg">
-                    <div className="font-semibold text-text-muted text-[10px] uppercase">Latency Distribution (p50 / p95 / p99)</div>
+                    <div className="font-semibold text-text-muted text-[10px] uppercase">Mutation Latency (p50 / p95 / p99)</div>
                     <div className="text-base font-bold text-text-secondary my-1">N/A</div>
                     <div className="text-[10px] text-text-muted font-sans leading-tight">
-                      Percentile latency distributions are measured under high-throughput batch loads in the Parametric Stress Harness tab.
+                      Per-operation mutation-capture latency percentiles are measured under high-throughput batch loads in the Parametric Stress Harness tab.
                     </div>
                   </div>
                   <div className="p-3 bg-white border border-border rounded-lg">
@@ -611,27 +611,27 @@ export function Analytics() {
               {/* Latency & Hardware Metrics Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <Card className="p-3 text-center">
-                  <span className="text-[10px] uppercase font-bold text-text-muted">p50 Latency</span>
+                  <span className="text-[10px] uppercase font-bold text-text-muted">p50 Mutation</span>
                   <div className="text-lg font-bold text-text-primary font-mono mt-1">
                     {stressMetrics.p50_latency_ms !== undefined ? `${stressMetrics.p50_latency_ms.toFixed(2)} ms` : 'N/A'}
                   </div>
-                  <span className="text-[10px] text-text-muted">Median time</span>
+                  <span className="text-[10px] text-text-muted">Median per-op</span>
                 </Card>
 
                 <Card className="p-3 text-center">
-                  <span className="text-[10px] uppercase font-bold text-text-muted">p95 Latency</span>
+                  <span className="text-[10px] uppercase font-bold text-text-muted">p95 Mutation</span>
                   <div className="text-lg font-bold text-text-primary font-mono mt-1">
                     {stressMetrics.p95_latency_ms !== undefined ? `${stressMetrics.p95_latency_ms.toFixed(2)} ms` : 'N/A'}
                   </div>
-                  <span className="text-[10px] text-text-muted">95th percentile</span>
+                  <span className="text-[10px] text-text-muted">95th pct per-op</span>
                 </Card>
 
                 <Card className="p-3 text-center">
-                  <span className="text-[10px] uppercase font-bold text-text-muted">p99 Latency</span>
+                  <span className="text-[10px] uppercase font-bold text-text-muted">p99 Mutation</span>
                   <div className="text-lg font-bold text-text-primary font-mono mt-1">
                     {stressMetrics.p99_latency_ms !== undefined ? `${stressMetrics.p99_latency_ms.toFixed(2)} ms` : 'N/A'}
                   </div>
-                  <span className="text-[10px] text-text-muted">Tail latency</span>
+                  <span className="text-[10px] text-text-muted">Tail per-op</span>
                 </Card>
 
                 <Card className="p-3 text-center">

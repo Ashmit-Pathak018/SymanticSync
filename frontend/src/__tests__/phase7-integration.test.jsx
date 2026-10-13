@@ -131,8 +131,115 @@ describe('Phase 7 Integration Tests', () => {
       fireEvent.click(relinkBtn);
 
       await waitFor(() => {
-        expect(api.resolveQuarantine).toHaveBeenCalled();
+        expect(api.resolveQuarantine).toHaveBeenCalledWith('q_101', 'relinked', '888', 'db_test');
         expect(screen.getByText(/Foreign key constraint violation: order_id 888 does not exist/i)).toBeDefined();
+      });
+    });
+
+    it('shows success message only when backend confirms matching relink status', async () => {
+      api.listQuarantine.mockResolvedValue(mockQuarantined);
+      api.resolveQuarantine.mockResolvedValue({
+        quarantine_id: 'q_101',
+        status: 'relinked',
+      });
+
+      render(
+        <MemoryRouter>
+          <AppProvider>
+            <Quarantine />
+          </AppProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('order_items')).toBeDefined();
+      });
+
+      fireEvent.click(screen.getByText('order_items'));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('e.g. 2')).toBeDefined();
+      });
+      const input = screen.getByPlaceholderText('e.g. 2');
+      fireEvent.change(input, { target: { value: '2' } });
+
+      const relinkBtn = screen.getByRole('button', { name: /Relink Parent & Restore/i });
+      fireEvent.click(relinkBtn);
+
+      await waitFor(() => {
+        expect(api.resolveQuarantine).toHaveBeenCalledWith('q_101', 'relinked', '2', 'db_test');
+        expect(screen.getByText(/successfully relinked under parent #2/i)).toBeDefined();
+      });
+    });
+
+    it('rejects and displays clear error when relink response status mismatches', async () => {
+      api.listQuarantine.mockResolvedValue(mockQuarantined);
+      api.resolveQuarantine.mockResolvedValue({
+        quarantine_id: 'q_101',
+        status: 'confirmed_deleted', // Mismatched!
+      });
+
+      render(
+        <MemoryRouter>
+          <AppProvider>
+            <Quarantine />
+          </AppProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('order_items')).toBeDefined();
+      });
+
+      fireEvent.click(screen.getByText('order_items'));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('e.g. 2')).toBeDefined();
+      });
+      const input = screen.getByPlaceholderText('e.g. 2');
+      fireEvent.change(input, { target: { value: '2' } });
+
+      const relinkBtn = screen.getByRole('button', { name: /Relink Parent & Restore/i });
+      fireEvent.click(relinkBtn);
+
+      await waitFor(() => {
+        expect(api.resolveQuarantine).toHaveBeenCalledWith('q_101', 'relinked', '2', 'db_test');
+        expect(screen.getByText(/Action mismatch: requested 'relinked' but backend returned status 'confirmed_deleted'/i)).toBeDefined();
+        expect(screen.queryByText(/successfully relinked/i)).toBeNull();
+      });
+    });
+
+    it('shows success on matching confirmed_deleted and errors on mismatched status', async () => {
+      api.listQuarantine.mockResolvedValue(mockQuarantined);
+      api.resolveQuarantine.mockResolvedValue({
+        quarantine_id: 'q_101',
+        status: 'confirmed_deleted',
+      });
+
+      render(
+        <MemoryRouter>
+          <AppProvider>
+            <Quarantine />
+          </AppProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('order_items')).toBeDefined();
+      });
+
+      fireEvent.click(screen.getByText('order_items'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Confirm Deletion \(Archive\)/i })).toBeDefined();
+      });
+
+      const deleteBtn = screen.getByRole('button', { name: /Confirm Deletion \(Archive\)/i });
+      fireEvent.click(deleteBtn);
+
+      await waitFor(() => {
+        expect(api.resolveQuarantine).toHaveBeenCalledWith('q_101', 'confirmed_deleted', null, 'db_test');
+        expect(screen.getByText(/confirmed deleted and archived/i)).toBeDefined();
       });
     });
   });

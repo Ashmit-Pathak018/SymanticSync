@@ -87,8 +87,8 @@ export function Quarantine() {
         dbIdParam
       );
 
-      // Verify that backend actually marked it as resolved
-      if (res && (res.status === action || res.status === 'confirmed_deleted' || res.status === 'relinked')) {
+      // Verify that backend actually confirmed the specific requested action
+      if (res && res.status === action) {
         setActionFeedback({
           id: quarantineId,
           type: 'success',
@@ -100,7 +100,10 @@ export function Quarantine() {
         await loadQuarantine();
         await refreshState();
       } else {
-        throw new Error('Backend did not return confirmation of resolution.');
+        const receivedStatus = res?.status || 'unknown';
+        throw new Error(
+          `Action mismatch: requested '${action}' but backend returned status '${receivedStatus}'.`
+        );
       }
     } catch (err) {
       setActionFeedback({
@@ -412,7 +415,6 @@ export function Quarantine() {
                                 setRelinkInputs({
                                   ...relinkInputs,
                                   [r.quarantine_id]: e.target.value,
-                                cloth: true,
                                 })
                               }
                               className="text-xs font-mono border border-border rounded-md px-2.5 py-1.5 w-24 text-text-primary focus:ring-1 focus:ring-primary focus:outline-hidden"

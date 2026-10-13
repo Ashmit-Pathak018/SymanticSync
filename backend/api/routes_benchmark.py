@@ -13,6 +13,7 @@ GET  /api/v1/metrics       → Get latest benchmark metrics and telemetry
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -174,15 +175,19 @@ def run_stress_benchmark(body: StressBenchmarkRequest) -> StressBenchmarkMetrics
     return StressBenchmarkMetrics(**result.to_dict())
 
 
-@router.get("/benchmark/artifacts", status_code=200)
-def list_benchmark_artifacts() -> list[dict[str, Any]]:
-    """List available benchmark JSON and CSV artifacts across known artifact folders."""
-    from pathlib import Path
-    dirs = [
+def get_artifact_dirs() -> list[Path]:
+    """Return search directories for benchmark matrix artifacts."""
+    return [
         Path(".codex-phase4-optimized-matrix-20261013"),
         DATA_DIR / "benchmarks",
         Path(".codex-phase4-matrix-20261013"),
     ]
+
+
+@router.get("/benchmark/artifacts", status_code=200)
+def list_benchmark_artifacts() -> list[dict[str, Any]]:
+    """List available benchmark JSON and CSV artifacts across known artifact folders."""
+    dirs = get_artifact_dirs()
     seen = set()
     artifacts = []
     for d in dirs:
@@ -221,20 +226,15 @@ def list_benchmark_artifacts() -> list[dict[str, Any]]:
 @router.get("/benchmark/artifacts/{filename}")
 def download_benchmark_artifact(filename: str):
     """Download or view a specific benchmark artifact."""
-    from pathlib import Path
     from fastapi.responses import FileResponse
 
     if "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid filename.")
 
-    dirs = [
-        Path(".codex-phase4-optimized-matrix-20261013"),
-        DATA_DIR / "benchmarks",
-        Path(".codex-phase4-matrix-20261013"),
-    ]
+    dirs = get_artifact_dirs()
     target_path = None
     for d in dirs:
-        p = d / filename
+        p = Path(d) / filename
         if p.exists() and p.is_file():
             target_path = p
             break
