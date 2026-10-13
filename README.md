@@ -171,14 +171,14 @@ python -m pytest backend/tests/ -v
 ```
 *Expected result: 282 passed in ~65 seconds.*
 
-### Run Frontend Vitest Suite (10 Tests)
+### Run Frontend Vitest Suite (13 Tests)
 To execute all frontend component and integration tests:
 ```bash
 cd frontend
 npm test
 cd ..
 ```
-*Expected result: 2 test files, 10 tests passed.*
+*Expected result: 2 test files, 13 tests passed.*
 
 ### Build Frontend Production Assets
 To verify clean compilation without linting or bundling errors:

@@ -210,7 +210,7 @@ The evaluation covers two distinct benchmark suites:
 * **Convergence Rate (CR):** The proportion of replicas that achieve bit-for-bit identical database state across all tables post-sync.
 * **Valid Resolution Accuracy (VRA):** Percentage of conflict resolutions that satisfy domain range and referential integrity constraints.
 * **Overhead per Conflict:** The computational time (in milliseconds) expended executing policy resolution algorithms versus baseline raw memory assignment.
-* **Per-Operation Mutation Latency Percentiles ($p50, p95, p99$):** Time required to apply an individual conflicting row mutation and record its CDC trigger entry into the replica's `_ss_change_log`. (Note: The benchmark harness measures per-operation mutation latency during contention rather than repeated end-to-end sync run distributions).
+* **Per-Operation Mutation Latency Percentiles ($p50, p95, p99$):** Wall-clock time around each replica-local `apply_change` call, including SQLite mutation and CDC trigger logging. Calls are applied sequentially; conflict density controls how many row IDs receive differing replica-local values, not simultaneous writers. These results do not measure concurrent-write latency.
 * **Aggregate Batch Synchronization Duration:** Total wall-clock duration expended by the synchronization middleware to execute the three-way delta reconciliation pipeline across both replicas (`total_sync_time_ms`).
 
 ### 6.3 Domain Workload Results
@@ -251,7 +251,7 @@ SemanticSync Engine  : [██████████████████�
 ### 6.5 Key Findings
 
 1. **Robust Semantic Accuracy Under Heavy Contention:** As conflict density increases from 5% to 50%, baseline LWW correctness deteriorates linearly from 95.0% down to 50.0% due to silent overwrites of concurrent updates. In contrast, SemanticSync maintains an SCR above 98.8% across all 10,000-operation scenarios.
-2. **Predictable Per-Operation Mutation Capture:** Individual mutation-capture latency percentiles remain constant across 1,000 to 10,000 operation batches ($p50 \approx 3.0$ ms, $p95 < 3.8$ ms, tail $p99 < 5.1$ ms), confirming that trigger-based CDC logging introduces zero progressive degradation. Aggregate batch synchronization scales predictably with conflict volume, from 0.70 s for 1,000 operations at 5% density to 94.01 s for 10,000 operations at 50% density.
+2. **Observed Mutation Capture in the Seeded Workload:** The measured per-operation capture percentiles in these sequential runs fall within the ranges shown in the table. Since the workload does not run simultaneous writers, these results do not establish contention behavior or general performance scaling. Aggregate batch synchronization took 0.70 s for 1,000 operations at 5% density and 94.01 s for 10,000 operations at 50% density.
 3. **Constant-Time Resolution Overhead:** Attribute-level policy resolution introduces approximately 0.03 ms per conflict, confirming that semantic policy execution introduces virtually zero throughput penalty relative to standard SQLite transaction execution.
 
 ---
