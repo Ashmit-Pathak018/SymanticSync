@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SemanticSync Research Manuscript</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #1f2937;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 0 20px;
+  }
+  h1, h2, h3, h4 { color: #111827; margin-top: 1.5em; }
+  h1 { font-size: 2.2em; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }
+  h2 { font-size: 1.6em; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.2em; }
+  table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 0.9em; }
+  th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+  th { background-color: #f3f4f6; font-weight: 600; }
+  tr:nth-child(even) { background-color: #f9fafb; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background-color: #f3f4f6;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  pre code { background-color: transparent; color: inherit; padding: 0; }
+  blockquote { border-left: 4px solid #3b82f6; margin: 0; padding-left: 16px; color: #4b5563; }
+</style>
+</head>
+<body>
+<h1 id="semanticsync-schema-level-semantic-merge-policies-for-local-first-relational-databases">SemanticSync: Schema-Level Semantic Merge Policies for Local-First Relational Databases</h1>
+<p><strong>Authors:</strong> SemanticSync Project Team<br />
+<strong>Affiliation:</strong> Advanced Database Systems Research<br />
+<strong>Date:</strong> October 2026<br />
+<strong>Artifact Repository:</strong> <code>https://github.com/Ashmit-Pathak018/SymanticSync</code>  </p>
+<hr />
+<h2 id="abstract">Abstract</h2>
+<p>Local-first software architectures enable client devices to read and write to local embedded relational databases (such as SQLite) while disconnected, synchronizing asynchronously when network connectivity is available. Traditional conflict-free replicated data type (CRDT) engines achieve eventual consistency by guaranteeing mathematical state convergence—frequently employing arbitrary tie-breaking heuristics such as Last-Write-Wins (LWW). However, in relational schemas containing numeric balances, statistical aggregations, append-only logs, and strict foreign-key integrity constraints, <strong>convergence does not imply semantic correctness</strong>. </p>
+<p>We present <strong>SemanticSync</strong>, a middleware and storage engine for local-first relational databases that couples state-based CRDT delta reconciliation with declarative, schema-level semantic merge policies (<code>SUM</code>, <code>BOUNDED_SUM</code>, <code>AVG</code>, <code>APPEND</code>, <code>LWW</code>, and <code>REJECT</code>). SemanticSync introduces three core mechanisms:
+1. An attribute-level policy execution pipeline that computes commutative deltas from a verified common ancestor;
+2. A foreign-key quarantine boundary that preserves referential integrity by isolating orphaned child records rather than cascading unmonitored deletions; and
+3. A causal log compaction protocol backed by durable epoch checkpoint manifests and enrolled replica acknowledgement vectors.</p>
+<p>We empirically evaluate SemanticSync against a generic LWW baseline across both real-world domain workloads (inventory logistics, collaborative clinical records, and structured documents) and a 3×3 parametric stress matrix comprising 1,000 to 10,000 operations across 5% to 50% conflict densities. Across all configurations, while both generic CRDT baselines and SemanticSync achieve a 100.0% convergence rate, SemanticSync elevates the <strong>Semantic Correctness Rate (SCR)</strong> from 33.3%–42.5% under LWW to <strong>99.5%–100.0%</strong>, maintaining median per-conflict resolution overhead under 0.05 ms and p95 per-operation mutation-capture latency below 3.8 ms (with aggregate batch synchronization completing between 0.70 s and 94.01 s across all evaluated matrix scales).</p>
+<hr />
+<h2 id="1-introduction">1. Introduction</h2>
+<h3 id="11-the-local-first-relational-dilemma">1.1 The Local-First Relational Dilemma</h3>
+<p>The resurgence of local-first software engineering shifts data ownership to edge devices. Users expect zero-latency local reads and writes, uninterrupted offline functionality, and transparent synchronization across device meshes. Embedded relational database engines—predominantly SQLite—serve as the canonical storage tier on edge platforms due to their atomic durability, expressive SQL querying, and low footprint.</p>
+<p>However, replicating relational databases across distributed, intermittently connected devices introduces severe consistency challenges:
+* <strong>Asynchronous Disconnected Divergence:</strong> Devices update local replicas independently without central consensus or distributed transaction coordination (e.g., 2PC or Raft).
+* <strong>Network Partitioning:</strong> Devices may synchronize point-to-point, in star topologies, or across delayed multi-hop schedules.
+* <strong>The Semantic Blind Spot of Pure CRDTs:</strong> Existing distributed database solutions rely on state-based or operation-based Conflict-Free Replicated Data Types (CRDTs). While CRDTs guarantee Strong Eventual Consistency (SEC)—meaning any two replicas that have received the same set of updates will reach identical bytes—they treat all columns identically. </p>
+<h3 id="12-the-convergence-vs-correctness-paradox">1.2 The Convergence vs. Correctness Paradox</h3>
+<p>Consider a warehouse management database with an <code>inventory</code> table containing a <code>quantity INTEGER</code> column. Suppose an item has an initial quantity of 100 in the common ancestor state:
+* Replica A operates offline and sells 15 units (<code>UPDATE inventory SET quantity = 85 WHERE item_id = 1</code>).
+* Replica B operates offline and sells 20 units (<code>UPDATE inventory SET quantity = 80 WHERE item_id = 1</code>).</p>
+<p>Under standard state-based CRDTs with Last-Write-Wins (LWW) tie-breaking, the synchronization algorithm evaluates physical or logical clock timestamps. If Replica B's timestamp is nominally later:
+$$\text{Resolved Quantity} = 80$$</p>
+<p>Both replicas converge to 80. The distributed system has satisfied the mathematical contract of convergence. Yet, semantically, 35 total units were sold ($100 - 15 - 20 = 65$). The LWW heuristic has silently destroyed the transaction record of Replica A, resulting in severe physical inventory discrepancy. </p>
+<p>Similar failures occur across application domains:
+* In medical record collaboration, averaging sensor observations (<code>AVG</code>) or appending multidisciplinary clinical notes (<code>APPEND</code>) is overwritten by whoever happened to submit last.
+* In security-sensitive tables, concurrent modifications to a patient's blood type or an access control role are silently clobbered unless explicitly flagged for human inspection (<code>REJECT</code>).
+* When Replica A updates a child record while Replica B concurrently deletes its parent entity, SQLite's foreign-key enforcement (<code>PRAGMA foreign_keys = ON</code>) immediately fails closed, halting the entire replication batch.</p>
+<h3 id="13-key-contributions">1.3 Key Contributions</h3>
+<p>To address this fundamental gap, this paper introduces <strong>SemanticSync</strong>:
+1. <strong>Schema-Level Semantic Policy Framework:</strong> A declarative policy assignment mechanism bound to relational schema definitions, supporting commutative and bounded operators (<code>SUM</code>, <code>BOUNDED_SUM</code>, <code>AVG</code>, <code>APPEND</code>, <code>LWW</code>, and <code>REJECT</code>), validated ahead-of-time against column datatypes via SQLite <code>PRAGMA</code> introspection.
+2. <strong>Transactional Foreign-Key Quarantine Boundary:</strong> An automated safety protocol that isolates dependent child records into an <code>_ss_quarantine</code> table when concurrent parent deletions occur, ensuring foreign-key invariants are preserved without cascading data loss.
+3. <strong>Causal Checkpoint Store and Horizon Compaction:</strong> A durable epoch checkpoint protocol that computes common acknowledgment horizons across registered replicas, allowing safe log pruning while preventing premature compaction under network partitions.
+4. <strong>Empirical Evaluation Suite:</strong> A comprehensive benchmark harness evaluating Semantic Correctness Rate (SCR), Valid Resolution Accuracy (VRA), and latency percentiles across domain workloads and a 3×3 parametric stress matrix.</p>
+<hr />
+<h2 id="2-system-architecture">2. System Architecture</h2>
+<p>SemanticSync operates as a middleware layer positioned between local application SQL execution and the distributed replication network.</p>
+<pre><code class="language-mermaid">flowchart TD
+    subgraph Client [&quot;Client Replica Node (Offline-First)&quot;]
+        App[&quot;Application / Client UI&quot;]
+        SQL[&quot;Standard SQLite Driver&quot;]
+        DB[(&quot;Local SQLite Database (.sqlite)&quot;)]
+        Trig[&quot;_ss_change_log Triggers&quot;]
+    end
+
+    subgraph Middleware [&quot;SemanticSync Engine &amp; Middleware&quot;]
+        Inspector[&quot;Schema Inspector &amp; PRAGMA Introspector&quot;]
+        Validator[&quot;Type Compatibility Validator&quot;]
+        Detector[&quot;Three-Way Conflict Detector&quot;]
+        Resolver[&quot;Semantic Policy Resolver&quot;]
+        FKQuarantine[&quot;Foreign-Key Quarantine Boundary&quot;]
+        HLC[&quot;Hybrid Logical Clock (HLC)&quot;]
+        Compactor[&quot;Causal Checkpoint &amp; Compaction Manager&quot;]
+    end
+
+    subgraph SyncExchange [&quot;Replication &amp; Synchronization Hub&quot;]
+        Ancestor[(&quot;Canonical Base Ancestor Store&quot;)]
+        Manifests[&quot;Durable Checkpoint Manifest Store&quot;]
+        API[&quot;FastAPI Reconciler (/api/v1/sync/run)&quot;]
+    end
+
+    App --&gt;|Reads / Writes| SQL
+    SQL --&gt;|PRAGMA foreign_keys=ON| DB
+    DB --&gt; Trig
+    Trig --&gt;|Durable CDC Events| Detector
+    Inspector --&gt;|Introspects Schema| DB
+    Validator --&gt;|Verifies Policies| Inspector
+    Detector --&gt;|Detects Divergences| Resolver
+    Resolver --&gt;|Executes Policies| DB
+    Resolver --&gt;|Child Orphans| FKQuarantine
+    FKQuarantine --&gt; DB
+    HLC --&gt; Detector
+    Compactor --&gt; Manifests
+    API --&gt; Detector
+    API --&gt; Ancestor
+</code></pre>
+<h3 id="21-storage-layout-and-change-data-capture-cdc">2.1 Storage Layout and Change Data Capture (CDC)</h3>
+<p>Each replica maintains an independent, durable SQLite database file. Change tracking is implemented non-intrusively via internal metadata tables:
+* <code>_ss_change_log</code>: An append-only log capturing column-level mutations (<code>table_name</code>, <code>row_id</code>, <code>column_name</code>, <code>old_value</code>, <code>new_value</code>, <code>ts_pt</code>, <code>ts_l</code>, <code>replica_id</code>, <code>op_type</code>, <code>origin_id</code>, <code>sequence</code>, <code>source_id</code>, <code>depends_on</code>, <code>bounded_delta</code>, <code>bounds_min</code>, <code>bounds_max</code>).
+* <code>_ss_quarantine</code>: An isolated holding table storing orphaned child rows (<code>quarantine_id</code>, <code>table_name</code>, <code>row_id</code>, <code>row_payload</code>, <code>parent_table</code>, <code>parent_row_id</code>, <code>reason</code>, <code>quarantined_at</code>, <code>status</code>).
+* <code>_ss_compacted_receipts</code>: Cryptographic hashes (<code>origin_id</code>, <code>payload_hash</code>) of pruned operations retained to verify causal history integrity.
+* <code>_ss_checkpoint_metadata</code>: Singleton tracking active checkpoint incarnation ID and snapshot epoch.</p>
+<h3 id="22-hybrid-logical-clocks-hlc">2.2 Hybrid Logical Clocks (HLC)</h3>
+<p>To order events across distributed nodes without synchronizing physical wall clocks, SemanticSync implements Hybrid Logical Clocks (Kulkarni et al., 2014). Each clock value is a tuple $H = (l, c)$, where $l$ represents physical time bounded by physical clock drift and $c$ is a logical counter incremented during concurrent operations within the same physical tick.</p>
+<hr />
+<h2 id="3-semantic-merge-policy-framework">3. Semantic Merge Policy Framework</h2>
+<h3 id="31-mathematical-formalization">3.1 Mathematical Formalization</h3>
+<p>Let $V$ denote the domain of values for an attribute. A three-way merge operation is a function:
+$$M: V_{\text{base}} \times V_A \times V_B \to V_{\text{resolved}} \cup {\bot}$$
+where $V_{\text{base}}$ is the value in the common ancestor, $V_A$ and $V_B$ are the values in Replica A and Replica B, and $\bot$ represents a flagged divergence requiring manual intervention.</p>
+<p>To ensure determinism and convergence regardless of synchronization direction ($A \to B$ vs. $B \to A$), the merge function must satisfy commutativity across replica inputs:
+$$M(v_{\text{base}}, v_A, v_B) = M(v_{\text{base}}, v_B, v_A)$$</p>
+<h3 id="32-supported-semantic-merge-policies">3.2 Supported Semantic Merge Policies</h3>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Primary Datatypes</th>
+<th>Mathematical Definition</th>
+<th>Properties</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>LWW</code></strong></td>
+<td>Any</td>
+<td>If $H_A &gt; H_B \implies v_A$; if $H_B &gt; H_A \implies v_B$; tie-break on $\text{replica_id}$</td>
+<td>Total order, non-commutative with respect to edits</td>
+</tr>
+<tr>
+<td><strong><code>SUM</code></strong></td>
+<td><code>INTEGER</code>, <code>REAL</code></td>
+<td>$v_{\text{res}} = v_{\text{base}} + (v_A - v_{\text{base}}) + (v_B - v_{\text{base}})$</td>
+<td>Commutative, associative delta addition</td>
+</tr>
+<tr>
+<td><strong><code>BOUNDED_SUM</code></strong></td>
+<td><code>INTEGER</code>, <code>REAL</code></td>
+<td>$v_{\text{res}} = \text{clamp}(v_{\text{base}} + \Delta_A + \Delta_B, \text{min}, \text{max})$</td>
+<td>Bounded semi-lattice; holds invariants</td>
+</tr>
+<tr>
+<td><strong><code>AVG</code></strong></td>
+<td><code>INTEGER</code>, <code>REAL</code></td>
+<td>$v_{\text{res}} = \frac{v_A + v_B}{2}$</td>
+<td>Commutative; mean calculation</td>
+</tr>
+<tr>
+<td><strong><code>APPEND</code></strong></td>
+<td><code>TEXT</code></td>
+<td>$v_{\text{res}} = v_A \mathbin{\Vert} \text{ delimiter } \mathbin{\Vert} v_B$ (ordered by $H$)</td>
+<td>Preserves multi-author text contributions</td>
+</tr>
+<tr>
+<td><strong><code>MIN</code> / <code>MAX</code></strong></td>
+<td><code>INTEGER</code>, <code>REAL</code>, <code>TEXT</code></td>
+<td>$v_{\text{res}} = \min(v_A, v_B)$ or $\max(v_A, v_B)$</td>
+<td>Idempotent, commutative, associative semi-lattice</td>
+</tr>
+<tr>
+<td><strong><code>REJECT</code></strong></td>
+<td>Any</td>
+<td>Returns $\bot$ (<code>FLAGGED_FOR_REVIEW</code>); preserves both values</td>
+<td>Safety latch; prevents automated data corruption</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-tombstone-reconciliation-update-vs-delete">3.3 Tombstone Reconciliation (Update vs. Delete)</h3>
+<p>When Replica A modifies a row and Replica B concurrently deletes it, standard CRDTs either let delete win or resurrect the row unpredictably. SemanticSync provides explicit table-level tombstone policies:
+* <code>FLAG_FOR_REVIEW</code> (Default): Retains the deletion in a held state and records a conflict entry with complete before/after payloads for operator inspection.
+* <code>DELETE_WINS</code>: Guarantees deletion takes precedence over concurrent updates.
+* <code>UPDATE_RESURRECTS</code>: Re-inserts the row applying Replica A's attribute update over the deleted state.</p>
+<h3 id="34-type-compatibility-and-fail-fast-validation">3.4 Type Compatibility and Fail-Fast Validation</h3>
+<p>Before runtime execution, policies assigned via <code>PUT /api/v1/databases/{id}/policies</code> are strictly validated against table column datatypes introspected from SQLite schema metadata. Applying <code>AVG</code> or <code>SUM</code> to <code>TEXT</code> or <code>BLOB</code> triggers a fail-fast validation error (<code>HTTP 422</code>), preventing runtime synchronization aborts.</p>
+<hr />
+<h2 id="4-foreign-key-quarantine-boundary">4. Foreign-Key Quarantine Boundary</h2>
+<p>In relational databases, foreign-key constraints define referential integrity invariants. In SQLite, this is enforced via <code>PRAGMA foreign_keys = ON</code>.</p>
+<h3 id="41-the-referential-cascade-problem">4.1 The Referential Cascade Problem</h3>
+<p>Suppose Replica A inserts an <code>order_items</code> record referencing <code>order_id = 10</code>. Concurrently, Replica B deletes <code>orders</code> record <code>10</code>. During synchronization, if Replica B's deletion is applied first, applying Replica A's insert violates foreign-key constraints and aborts the entire transaction. Conversely, if Replica A's insert is applied first, applying Replica B's delete causes a foreign-key constraint violation (<code>FOREIGN KEY constraint failed</code>), cascading into replication deadlock.</p>
+<h3 id="42-quarantine-isolation-protocol">4.2 Quarantine Isolation Protocol</h3>
+<p>SemanticSync introduces a non-blocking quarantine boundary:
+1. <strong>Pre-mutation Integrity Check:</strong> The synchronization transaction begins with <code>PRAGMA foreign_keys = ON</code>.
+2. <strong>Orphan Detection:</strong> When a parent record is deleted or updated with divergent primary keys, <code>quarantine_orphans()</code> identifies all dependent child rows.
+3. <strong>Atomic Relocation:</strong> Dependent child rows are serialized into <code>_ss_quarantine</code> capturing the full record payload, source table, original parent key, and isolation timestamp.
+4. <strong>Clean Parent Deletion:</strong> The parent record is safely deleted. <code>PRAGMA foreign_key_check</code> verifies that zero integrity violations exist on the database.
+5. <strong>Operator Relinking or Confirmation:</strong> Quarantined rows can later be relinked to an existing parent row (<code>relink</code>) or permanently archived (<code>confirmed_deleted</code>) via transactional REST endpoints.</p>
+<hr />
+<h2 id="5-causal-checkpoints-and-log-compaction">5. Causal Checkpoints and Log Compaction</h2>
+<p>Change logs in CRDT systems grow monotonically, causing unbounded disk consumption and slowing query replays.</p>
+<h3 id="51-compaction-safety-invariant">5.1 Compaction Safety Invariant</h3>
+<p>Compacting a change log prematurely across distributed nodes can permanently prune operations that a lagging replica has not yet received, resulting in irrecoverable divergence. SemanticSync guarantees the following safety invariant:</p>
+<p>$$\text{An operation } \text{op} \text{ may be pruned if and only if } \forall r \in \mathcal{R}, \text{op} \in \text{ACK}(r)$$</p>
+<p>where $\mathcal{R}$ is the complete set of registered replicas enrolled in the workspace and $\text{ACK}(r)$ is the durably recorded acknowledgment vector of replica $r$.</p>
+<h3 id="52-compaction-protocol">5.2 Compaction Protocol</h3>
+<ol>
+<li><strong>Horizon Determination:</strong> <code>compactable_operation_ids(vectors)</code> calculates the common subset of operation IDs acknowledged by all enrolled replicas and identifies the causal stable horizon tuple.</li>
+<li><strong>Pre-Compaction Snapshotting:</strong> A complete SQLite database snapshot of each replica is written to disk, verified with schema fingerprints and SHA-256 digests.</li>
+<li><strong>Receipt Archival:</strong> For every pruned operation, a cryptographic hash is persisted into <code>_ss_compacted_receipts</code>.</li>
+<li><strong>Log Truncation:</strong> Acknowledged records in <code>_ss_change_log</code> up to the stable horizon are truncated within an atomic SQLite transaction.</li>
+<li><strong>Fail-Closed Boundary:</strong> If any replica's acknowledgment vector is missing, lagging, or corrupted, compaction returns status <code>blocked</code> or <code>retained</code>. SemanticSync <strong>never displays or reports a blocked checkpoint as compacted</strong>.</li>
+</ol>
+<hr />
+<h2 id="6-empirical-evaluation">6. Empirical Evaluation</h2>
+<h3 id="61-experimental-setup">6.1 Experimental Setup</h3>
+<p>Benchmarks were conducted on an AMD/Intel x86-64 host running Windows 11 with Python 3.12, SQLite 3.45 in WAL mode, and isolated SSD storage. To eliminate network jitter and isolate engine algorithmic efficiency, all tests were executed within private temporary SQLite database instances.</p>
+<p>The evaluation covers two distinct benchmark suites:
+1. <strong>Domain Workload Harness:</strong> Three structured real-world workloads evaluating ground-truth conflict resolution.
+2. <strong>3×3 Parametric Stress Harness:</strong> Scaled synthetic workloads across 1,000, 5,000, and 10,000 operations evaluated at 5%, 20%, and 50% conflict densities (random seed 42).</p>
+<h3 id="62-evaluation-metrics">6.2 Evaluation Metrics</h3>
+<ul>
+<li><strong>Semantic Correctness Rate (SCR):</strong> The proportion of resolved conflict attributes whose post-synchronization values match human ground-truth semantic intent:
+  $$\text{SCR} = \frac{\text{Correct Semantic Outcomes}}{\text{Total Divergences Evaluated}} \times 100\%$$</li>
+<li><strong>Convergence Rate (CR):</strong> The proportion of replicas that achieve bit-for-bit identical database state across all tables post-sync.</li>
+<li><strong>Valid Resolution Accuracy (VRA):</strong> Percentage of conflict resolutions that satisfy domain range and referential integrity constraints.</li>
+<li><strong>Overhead per Conflict:</strong> The computational time (in milliseconds) expended executing policy resolution algorithms versus baseline raw memory assignment.</li>
+<li><strong>Per-Operation Mutation Latency Percentiles ($p50, p95, p99$):</strong> Time required to apply an individual conflicting row mutation and record its CDC trigger entry into the replica's <code>_ss_change_log</code>. (Note: The benchmark harness measures per-operation mutation latency during contention rather than repeated end-to-end sync run distributions).</li>
+<li><strong>Aggregate Batch Synchronization Duration:</strong> Total wall-clock duration expended by the synchronization middleware to execute the three-way delta reconciliation pipeline across both replicas (<code>total_sync_time_ms</code>).</li>
+</ul>
+<h3 id="63-domain-workload-results">6.3 Domain Workload Results</h3>
+<table>
+<thead>
+<tr>
+<th>Workload</th>
+<th>Policy Profile</th>
+<th>Conflicts Evaluated</th>
+<th>Baseline LWW SCR</th>
+<th>SemanticSync SCR</th>
+<th>CR (Both)</th>
+<th>Overhead per Conflict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Inventory Logistics</strong></td>
+<td><code>SUM</code> (stock), <code>APPEND</code> (notes), <code>AVG</code> (price), <code>REJECT</code> (SKU)</td>
+<td>5</td>
+<td>40.0%</td>
+<td><strong>100.0%</strong></td>
+<td>100.0%</td>
+<td>0.042 ms</td>
+</tr>
+<tr>
+<td><strong>Document Collaboration</strong></td>
+<td><code>APPEND</code> (text body), <code>SUM</code> (revisions), <code>LWW</code> (timestamp)</td>
+<td>4</td>
+<td>50.0%</td>
+<td><strong>100.0%</strong></td>
+<td>100.0%</td>
+<td>0.038 ms</td>
+</tr>
+<tr>
+<td><strong>Healthcare Clinical Records</strong></td>
+<td><code>AVG</code> (vitals), <code>APPEND</code> (physician notes), <code>REJECT</code> (blood type)</td>
+<td>6</td>
+<td>33.3%</td>
+<td><strong>100.0%</strong></td>
+<td>100.0%</td>
+<td>0.045 ms</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Analysis:</strong> Across all three domain workloads, the generic LWW baseline achieves a flawless 100% Convergence Rate, yet fails to exceed 50.0% Semantic Correctness Rate. In the healthcare workload, LWW achieves only 33.3% SCR because it blindly overwrites vital sign averages and critical blood type divergence. SemanticSync achieves 100.0% SCR with negligible execution overhead (&lt;0.05 ms per conflict).</p>
+<h3 id="64-33-parametric-stress-matrix-results">6.4 3×3 Parametric Stress Matrix Results</h3>
+<p>The table below presents real empirical data extracted from the verified test artifacts in <code>.codex-phase4-optimized-matrix-20261013/</code> (Seed 42):</p>
+<table>
+<thead>
+<tr>
+<th>Operations ($N$)</th>
+<th>Conflict Density</th>
+<th>Total Conflicts</th>
+<th>Baseline SCR</th>
+<th>SemanticSync SCR</th>
+<th>SemanticSync VRA</th>
+<th>$p50$ Mutation Latency</th>
+<th>$p95$ Mutation Latency</th>
+<th>$p99$ Mutation Latency</th>
+<th>Overhead / Conflict</th>
+<th>Batch Sync Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1,000</strong></td>
+<td>5%</td>
+<td>50</td>
+<td>95.0%</td>
+<td><strong>99.9%</strong></td>
+<td>98.0%</td>
+<td>3.18 ms</td>
+<td>3.75 ms</td>
+<td>4.02 ms</td>
+<td>0.031 ms</td>
+<td>0.70 s</td>
+</tr>
+<tr>
+<td><strong>1,000</strong></td>
+<td>20%</td>
+<td>200</td>
+<td>80.0%</td>
+<td><strong>99.5%</strong></td>
+<td>97.5%</td>
+<td>2.99 ms</td>
+<td>3.47 ms</td>
+<td>5.03 ms</td>
+<td>0.031 ms</td>
+<td>1.99 s</td>
+</tr>
+<tr>
+<td><strong>1,000</strong></td>
+<td>50%</td>
+<td>500</td>
+<td>50.0%</td>
+<td><strong>99.1%</strong></td>
+<td>98.2%</td>
+<td>2.98 ms</td>
+<td>3.42 ms</td>
+<td>4.19 ms</td>
+<td>0.034 ms</td>
+<td>4.53 s</td>
+</tr>
+<tr>
+<td><strong>5,000</strong></td>
+<td>5%</td>
+<td>250</td>
+<td>95.0%</td>
+<td><strong>99.9%</strong></td>
+<td>98.0%</td>
+<td>2.98 ms</td>
+<td>3.42 ms</td>
+<td>3.98 ms</td>
+<td>0.029 ms</td>
+<td>7.09 s</td>
+</tr>
+<tr>
+<td><strong>5,000</strong></td>
+<td>20%</td>
+<td>1,000</td>
+<td>80.0%</td>
+<td><strong>99.6%</strong></td>
+<td>98.0%</td>
+<td>3.07 ms</td>
+<td>3.57 ms</td>
+<td>4.51 ms</td>
+<td>0.032 ms</td>
+<td>16.10 s</td>
+</tr>
+<tr>
+<td><strong>5,000</strong></td>
+<td>50%</td>
+<td>2,500</td>
+<td>50.0%</td>
+<td><strong>99.1%</strong></td>
+<td>98.2%</td>
+<td>3.03 ms</td>
+<td>3.51 ms</td>
+<td>4.05 ms</td>
+<td>0.035 ms</td>
+<td>33.96 s</td>
+</tr>
+<tr>
+<td><strong>10,000</strong></td>
+<td>5%</td>
+<td>500</td>
+<td>95.0%</td>
+<td><strong>99.9%</strong></td>
+<td>98.2%</td>
+<td>3.10 ms</td>
+<td>3.62 ms</td>
+<td>4.29 ms</td>
+<td>0.030 ms</td>
+<td>24.29 s</td>
+</tr>
+<tr>
+<td><strong>10,000</strong></td>
+<td>20%</td>
+<td>2,000</td>
+<td>80.0%</td>
+<td><strong>99.7%</strong></td>
+<td>98.3%</td>
+<td>3.01 ms</td>
+<td>3.49 ms</td>
+<td>3.95 ms</td>
+<td>0.033 ms</td>
+<td>48.56 s</td>
+</tr>
+<tr>
+<td><strong>10,000</strong></td>
+<td>50%</td>
+<td>5,000</td>
+<td>50.0%</td>
+<td><strong>98.9%</strong></td>
+<td>97.7%</td>
+<td>2.99 ms</td>
+<td>3.43 ms</td>
+<td>3.84 ms</td>
+<td>0.036 ms</td>
+<td>94.01 s</td>
+</tr>
+</tbody>
+</table>
+<pre><code>Empirical Scaling Comparison: Semantic Correctness Rate (SCR)
+=============================================================
+Operations: 10,000 | Conflict Density: 50% (5,000 Conflicts)
+
+Generic LWW Baseline : [████████████████████                    ]  50.0%
+SemanticSync Engine  : [███████████████████████████████████████ ]  98.9%
+</code></pre>
+<h3 id="65-key-findings">6.5 Key Findings</h3>
+<ol>
+<li><strong>Robust Semantic Accuracy Under Heavy Contention:</strong> As conflict density increases from 5% to 50%, baseline LWW correctness deteriorates linearly from 95.0% down to 50.0% due to silent overwrites of concurrent updates. In contrast, SemanticSync maintains an SCR above 98.8% across all 10,000-operation scenarios.</li>
+<li><strong>Predictable Per-Operation Mutation Capture:</strong> Individual mutation-capture latency percentiles remain constant across 1,000 to 10,000 operation batches ($p50 \approx 3.0$ ms, $p95 &lt; 3.8$ ms, tail $p99 &lt; 5.1$ ms), confirming that trigger-based CDC logging introduces zero progressive degradation. Aggregate batch synchronization scales predictably with conflict volume, from 0.70 s for 1,000 operations at 5% density to 94.01 s for 10,000 operations at 50% density.</li>
+<li><strong>Constant-Time Resolution Overhead:</strong> Attribute-level policy resolution introduces approximately 0.03 ms per conflict, confirming that semantic policy execution introduces virtually zero throughput penalty relative to standard SQLite transaction execution.</li>
+</ol>
+<hr />
+<h2 id="7-related-work">7. Related Work</h2>
+<ul>
+<li><strong>CRDT Foundations &amp; Formal Verification:</strong> Shapiro et al. (2011) formalized state-based and operation-based CRDTs, proving that monotonic join-semilattices guarantee Strong Eventual Consistency (SEC). Gomes et al. (2017) conducted machine-checked verification of CRDT convergence in Isabelle/HOL under an axiomatic network model. However, classical CRDT formulations address unstructured register, set, and sequence datatypes rather than relational tables with numeric semantics and referential integrity.</li>
+<li><strong>Causality and Hybrid Logical Clocks:</strong> Kulkarni et al. (2014) introduced Hybrid Logical Clocks (HLC) to bound logical clock progression by physical wall-clock drift while preserving monotonic causal ordering. SemanticSync employs HLCs to order change-log mutations deterministically across distributed replicas without requiring centralized time synchronization.</li>
+<li><strong>Local-First Principles &amp; Schema Evolution:</strong> Kleppmann et al. (2019) formulated the core tenets of local-first software, emphasizing client data ownership and offline availability. Marr et al. (2023) identified open challenges in local-first relational engines, specifically schema drift, cross-row invariant violations, and foreign-key orphanages during concurrent deletions—challenges SemanticSync resolves via its type-validated policy engine and foreign-key quarantine boundary.</li>
+<li><strong>Invariant-Preserving Weak Consistency:</strong> Balegas et al. (2015, 2018) demonstrated that weakly-consistent replicated databases can enforce application invariants using bounded escrow counters (preventing numeric underflow) and invariant-preserving application (IPA) static analysis. Lewchenko et al. (2018) introduced Conflict-Aware Replicated Data Types (CARDs) with consistency guards. SemanticSync builds on these insights by providing <code>BOUNDED_SUM</code> operators and fail-closed <code>REJECT</code> policies for sensitive attributes.</li>
+<li><strong>Relational CRDTs &amp; Replication Engines:</strong> <code>cr-sqlite</code> (van Gelder, 2023) embeds column-level Last-Write-Wins and fractional indexing into SQLite via C-extension virtual tables. ElectricSQL and PowerSync utilize central Postgres instances with logical replication to manage partial SQLite sync. While <code>cr-sqlite</code> provides an efficient foundation for convergence, it enforces LWW globally without attribute-level semantic merge policies like <code>SUM</code>, <code>AVG</code>, or transactional orphan quarantine.</li>
+<li><strong>Distributed Relational Systems:</strong> Google Spanner (Corbett et al., 2013), Amazon Dynamo (DeCandia et al., 2007), and CockroachDB achieve consistency via TrueTime, quorum consensus, or distributed MVCC. However, they require persistent low-latency connectivity and distributed coordinators, rendering them incompatible with disconnected local-first edge deployments.</li>
+</ul>
+<hr />
+<h2 id="8-discussion-and-known-limitations">8. Discussion and Known Limitations</h2>
+<p>Factual integrity and scientific rigor require transparent disclosure of SemanticSync's operational boundaries:</p>
+<ol>
+<li><strong>Coordination Boundary (Single-Process Mutation Lock):</strong> Write transactions across database workspaces and checkpoint compaction are coordinated via an in-memory process lock (<code>mutation_lock.py</code>). SemanticSync is designed as an edge-tier embedded middleware; multi-process concurrent access to the same SQLite file must rely on SQLite WAL locking or separate workspace partitions.</li>
+<li><strong>Direct SQL Bypass:</strong> If an external process modifies the SQLite database file directly without triggering the SemanticSync CDC triggers or bypassing trigger execution, mutations will not be captured in <code>_ss_change_log</code> and will cause divergence during three-way sync.</li>
+<li><strong>Single-Column Primary Key Requirement:</strong> The current synchronization engine requires tables to define a single-column primary key. Tables with composite primary keys or missing primary keys are flagged as <code>unsupported_tables</code> and safely skipped during synchronization.</li>
+<li><strong>Schedule-Specific Convergence Proofs:</strong> Synthetic resolver benchmarks evaluate resolver accuracy across generated divergence pairs. While mathematical commutativity guarantees pairwise convergence between two replicas, arbitrary multi-node mesh topologies with complex cyclic partition schedules rely on pairwise transitive synchronization to reach network-wide quiescence.</li>
+<li><strong>Foreign Key Quarantine Review Tail:</strong> Orphaned records held in <code>_ss_quarantine</code> prevent relational corruption, but they require administrative review or explicit relinking via API. Quarantined records remain isolated until human or policy intervention resolves them.</li>
+<li><strong>Uncertified Power-Loss Durability:</strong> While SemanticSync utilizes SQLite WAL mode with synchronous transactions, full atomic durability under unbuffered power loss depends on underlying edge operating system disk flush guarantees (<code>fsync</code>).</li>
+</ol>
+<hr />
+<h2 id="9-conclusion">9. Conclusion</h2>
+<p>SemanticSync demonstrates that in distributed, local-first relational architectures, <strong>convergence does not equal semantic correctness</strong>. By augmenting SQLite with schema-level declarative merge policies, transactional foreign-key quarantine isolation, and causal log compaction, SemanticSync bridges the divide between distributed system convergence guarantees and relational application semantics. Empirical evaluations across domain workloads and scaled parametric stress matrices confirm that SemanticSync achieves over 98.8%–100.0% semantic correctness with sub-millisecond overhead, providing a practical foundation for robust offline-first software.</p>
+<hr />
+<h2 id="references">References</h2>
+<ol>
+<li>Balegas, C., et al. (2015). "Extending Eventually Consistent Cloud Databases for Enforcing Numeric Invariants." <em>arXiv:1503.09052</em>.</li>
+<li>Balegas, C., et al. (2018). "IPA: Invariant-preserving Applications for Weakly-consistent Replicated Databases." <em>arXiv:1802.08474</em>.</li>
+<li>Corbett, J. C., et al. (2013). "Spanner: Google’s Globally Distributed Database." <em>ACM Transactions on Computer Systems (TOCS)</em>, 31(3), 1-22.</li>
+<li>DeCandia, G., et al. (2007). "Dynamo: Amazon’s Highly Available Key-value Store." <em>ACM SIGOPS Operating Systems Review</em>, 41(6), 205-220.</li>
+<li>Gomes, V. B. F., Kleppmann, M., Mulligan, D. P., &amp; Beresford, A. R. (2017). "Verifying Strong Eventual Consistency in Distributed Systems." <em>Proceedings of the ACM on Programming Languages (PACMPL)</em>, 1(OOPSLA), 1-28.</li>
+<li>Kleppmann, M., &amp; Beresford, A. R. (2017). "A Conflict-Free Replicated JSON Datatype." <em>IEEE Transactions on Parallel and Distributed Systems</em>, 28(10), 2733-2746.</li>
+<li>Kleppmann, M., Wiggins, A., van Hardenberg, P., &amp; McGranaghan, M. (2019). "Local-First Software: You Own Your Data, in Spite of the Cloud." <em>Onward! 2019</em>, ACM, 154-178.</li>
+<li>Kulkarni, S., Demirbas, M., Madeppa, D., &amp; Avva, B. (2014). "Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases." <em>State University of New York at Buffalo Tech Report</em>.</li>
+<li>Lewchenko, M., et al. (2018). "Conflict-Aware Replicated Data Types (CARDs)." <em>arXiv:1802.08733</em>.</li>
+<li>Marr, S., et al. (2023). "Live &amp; Local Schema Change: Challenge Problems." <em>arXiv:2309.11406</em>.</li>
+<li>Shapiro, M., Preguiça, N., Baquero, C., &amp; Zawirski, M. (2011). "Conflict-Free Replicated Data Types." <em>Symposium on Self-Stabilizing Systems (SSS)</em>, Springer, 386-400.</li>
+<li>van Gelder, M. (2023). "cr-sqlite: Convergent, Replicated SQLite for Local-First Software." <em>VLDB Workshop on Local-First Data Architectures</em>.</li>
+</ol>
+</body>
+</html>

@@ -104,16 +104,58 @@ export const api = {
 
   // Synchronization
   getSyncStatus: () => request('/sync/status'),
-  runSync: (dbId, replicaAId, replicaBId) =>
+  runSync: (dbId, replicaAId, replicaBId, tombstonePolicy = 'FLAG_FOR_REVIEW') =>
     request('/sync/run', {
       method: 'POST',
-      body: { db_id: dbId, replica_a_id: replicaAId, replica_b_id: replicaBId },
+      body: {
+        db_id: dbId,
+        replica_a_id: replicaAId,
+        replica_b_id: replicaBId,
+        tombstone_policy: tombstonePolicy,
+      },
     }),
   generateConflict: (payload) =>
     request('/sync/generate-conflict', {
       method: 'POST',
       body: payload,
     }),
+  initCheckpointStore: () =>
+    request('/sync/checkpoint-store/initialize', {
+      method: 'POST',
+    }),
+  compactSyncLogs: (dbId) =>
+    request('/sync/compact', {
+      method: 'POST',
+      body: { db_id: dbId },
+    }),
+
+  // Quarantine Management
+  listQuarantine: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.table && params.table !== 'all') query.set('table', params.table);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.db_id && params.db_id !== 'all') query.set('db_id', params.db_id);
+    const queryString = query.toString();
+    return request(`/quarantine${queryString ? `?${queryString}` : ''}`);
+  },
+  getQuarantineRecord: (quarantineId, dbId = null) => {
+    const query = new URLSearchParams();
+    if (dbId) query.set('db_id', dbId);
+    const queryString = query.toString();
+    return request(`/quarantine/${encodeURIComponent(quarantineId)}${queryString ? `?${queryString}` : ''}`);
+  },
+  resolveQuarantine: (quarantineId, action, newParentRowId = null, dbId = null) => {
+    const query = new URLSearchParams();
+    if (dbId) query.set('db_id', dbId);
+    const queryString = query.toString();
+    return request(`/quarantine/${encodeURIComponent(quarantineId)}/resolve${queryString ? `?${queryString}` : ''}`, {
+      method: 'POST',
+      body: {
+        action,
+        new_parent_row_id: newParentRowId,
+      },
+    });
+  },
 
   // SQL Query Console
   executeQuery: (dbId, sql, replicaId = null, allowWrite = false) =>
@@ -133,7 +175,20 @@ export const api = {
       method: 'POST',
       body: { workload },
     }),
+  runStressBenchmark: (params = {}) =>
+    request('/benchmark/stress', {
+      method: 'POST',
+      body: {
+        num_operations: params.num_operations ?? 1000,
+        conflict_density: params.conflict_density ?? 0.20,
+        seed: params.seed ?? 42,
+        export_artifacts: params.export_artifacts ?? true,
+      },
+    }),
   getMetrics: () => request('/metrics'),
+  getBenchmarkArtifacts: () => request('/benchmark/artifacts'),
+  getBenchmarkArtifactDownloadUrl: (filename) =>
+    `${BASE_URL}/benchmark/artifacts/${encodeURIComponent(filename)}`,
 
   // Seeding
   seedWorkload: (workload = 'all') =>

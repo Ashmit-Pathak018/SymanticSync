@@ -4,149 +4,275 @@
 
 ---
 
-## 💡 Core Philosophy
-- **Keep SQL and SQLite:** The underlying database remains ordinary SQLite and developers continue to use standard SQL for creating tables, querying, and updating records.
-- **Build Principle:** *CRDT handles convergence; the semantic middleware handles the meaning of a conflict.*
-- **Domain Independence:** The engine operates on datatypes and schema configuration (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`), never hardcoding domain assumptions.
+## 💡 Core Philosophy & Thesis
+
+- **Keep SQL and SQLite:** The underlying storage tier remains standard, embedded SQLite. Developers continue writing ordinary SQL schemas, queries, and transactions.
+- **The Core Thesis:** ***Convergence does not equal semantic correctness.*** Traditional CRDT engines achieve state convergence through arbitrary tie-breaking heuristics such as Last-Write-Wins (LWW). While replicas reach identical bytes, valid transactions are silently destroyed (e.g. concurrent sales overwritten instead of added).
+- **Domain Independence:** SemanticSync operates purely on relational schemas, SQL datatypes, and declarative merge policies (`SUM`, `BOUNDED_SUM`, `AVG`, `APPEND`, `LWW`, and `REJECT`), never hardcoding business assumptions.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client ["Offline-First Client Replicas"]
+        AppA["Replica A (Offline Node)"]
+        AppB["Replica B (Offline Node)"]
+        DBA[("Local SQLite Replica A")]
+        DBB[("Local SQLite Replica B")]
+        TrigA["_ss_change_log CDC"]
+        TrigB["_ss_change_log CDC"]
+    end
+
+    subgraph Engine ["SemanticSync Middleware & Engine"]
+        Inspector["Schema Inspector & PRAGMA Introspection"]
+        Validator["Type Compatibility Validator"]
+        Detector["Three-Way Conflict Detector"]
+        Resolver["Semantic Merge Policy Resolver"]
+        FKQ["Foreign Key Quarantine Boundary (_ss_quarantine)"]
+        HLC["Hybrid Logical Clock (HLC)"]
+        Compactor["Causal Checkpoint & Compaction Manager"]
+    end
+
+    subgraph Hub ["Synchronization Hub & State Store"]
+        BaseDB[("Canonical Ancestor Store")]
+        Journal[("Checkpoint Journal Manifests")]
+        API["FastAPI REST API Service (/api/v1)"]
+    end
+
+    AppA --> DBA
+    AppB --> DBB
+    DBA --> TrigA
+    DBB --> TrigB
+    TrigA --> Detector
+    TrigB --> Detector
+    Inspector --> BaseDB
+    Validator --> Inspector
+    Detector --> Resolver
+    Resolver --> BaseDB
+    Resolver --> FKQ
+    Compactor --> Journal
+    API --> Detector
+    API --> Compactor
+```
 
 ---
 
 ## 🚀 Key Features
-- **Schema-Level Semantic Policies:**
-  - `SUM`: Additive delta reconciliation for numeric columns (e.g. inventory counts, balances).
-  - `AVG`: Arithmetic mean calculation (e.g. sensor readings, dosages, ratings).
-  - `APPEND`: Preserves concurrent text contributions with deterministic ordering.
-  - `LWW`: Last-Write-Wins based on Hybrid Logical Clock (HLC) timestamps and replica IDs.
-  - `REJECT`: Flags ambiguous or critical divergences for human review (e.g. blood types, statuses).
-  - `MIN` / `MAX`: Extremum bounding.
-- **Fail-Fast Policy Compatibility Validation:** Incompatible configurations (such as `AVG` on `TEXT`) are caught before runtime (`HTTP 422`).
-- **Dynamic SQLite Schema Inspector:** Automatically inspects tables, column datatypes, and constraints using SQLite `PRAGMA` introspection.
-- **CRDT Synchronization Engine:** Multi-replica change tracking using Hybrid Logical Clocks (HLC) and three-way conflict detection.
-- **Research Benchmark Suite:** Empirical measurement comparing Generic Baseline (LWW) vs SemanticSync middleware across three domain workloads (Inventory, Notes, Healthcare) measuring **Semantic Correctness Rate (SCR)**, **Convergence**, and **Overhead**.
-- **REST API (`/api/v1`):** Complete REST API for workspaces, schemas, policies, conflict resolution, synchronization, and SQL console.
+
+### 1. Schema-Level Semantic Policies
+- **`SUM`**: Additive delta reconciliation from the common ancestor ($v_{\text{base}} + \Delta_A + \Delta_B$) for numeric fields (e.g., inventory counts, account balances).
+- **`BOUNDED_SUM`**: Additive delta execution with strict upper and lower bounding semi-lattices (e.g. inventory clamped to `[0, 1000]`).
+- **`AVG`**: Arithmetic mean reconciliation for statistical observations (e.g., sensor telemetry, clinical vital signs).
+- **`APPEND`**: Multi-author text concatenation with HLC-ordered delimiters, preserving concurrent contributions.
+- **`LWW`**: Last-Write-Wins based on Hybrid Logical Clock timestamps with deterministic replica ID tie-breaking.
+- **`REJECT`**: Strict safety latch that holds conflicting updates in a pending review state for human intervention (e.g., patient blood types, security roles).
+- **`MIN` / `MAX`**: Idempotent extremum bounds.
+
+### 2. Tombstone Merge Policies
+Resolves concurrent updates vs. deletions:
+- **`FLAG_FOR_REVIEW` (Default)**: Preserves both the update and the deletion in held conflict records for administrative decision.
+- **`DELETE_WINS`**: Deletion takes precedence over concurrent updates.
+- **`UPDATE_RESURRECTS`**: Concurrent update re-inserts and resurrects the deleted record.
+
+### 3. Transactional Foreign-Key Isolation Boundary
+- Operates under strict SQLite foreign-key enforcement (`PRAGMA foreign_keys = ON`).
+- When a parent record is deleted or modified concurrently, orphaned child records are atomically migrated into `_ss_quarantine` rather than cascading unmonitored deletions.
+- Full quarantine inspection, parent relinking (`relink`), and archive confirmation (`confirmed_deleted`) endpoints.
+
+### 4. Operational Checkpoints & Causal Compaction
+- Prevents unbounded growth of `_ss_change_log`.
+- Computes common acknowledgment horizons across registered replicas.
+- **Safety Guarantee:** Compaction is fail-closed. If any enrolled replica's acknowledgment vector is missing, lagging, or corrupted, compaction returns `blocked` or `retained`. **Blocked checkpoints are never reported as compacted.**
+
+### 5. Empirical Benchmark Suite
+- **Domain Workload Harness:** Evaluates Inventory, Notes, and Healthcare workloads against ground-truth pairs.
+- **3×3 Parametric Stress Harness:** Scaled tests across 1,000, 5,000, and 10,000 operations at 5%, 20%, and 50% conflict densities with random seed controls.
+- **Artifact Repository:** Direct browser inspection and download of raw JSON and CSV benchmark matrices.
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```text
 SemanticSync/
-├── agent.md                      # AI agent guardrails and collaboration contract
-├── README.md                     # Project overview and documentation
-├── main.py                       # API server runner
-│
-├── backend/                      # Python backend (FastAPI + SQLite3 + CRDT)
+├── docs/                         # Comprehensive architecture & research docs
+│   ├── MANUSCRIPT.md             # Complete academic research paper manuscript
+│   ├── ARCHITECTURE.md           # System architecture and data flow
+│   ├── POLICY_SPECIFICATION.md   # Algebraic policy definitions and formal rules
+│   ├── CONFLICT_MODEL.md         # Conflict taxonomy and row mutation models
+│   ├── KNOWN_LIMITATIONS.md      # Factual operational boundaries and constraints
+│   └── TRACEABILITY_MATRIX.md    # Requirement to implementation mapping
+├── backend/                      # Python backend engine (FastAPI + SQLite3)
 │   ├── api/                      # REST API endpoints (/api/v1/...)
-│   │   ├── models.py             # Pydantic v2 schemas
-│   │   ├── state.py              # Persistent AppState store
-│   │   ├── routes_databases.py   # Workspace and replica management
-│   │   ├── routes_policies.py    # Schema policies and validation
+│   │   ├── routes_databases.py   # Workspaces and replica management
+│   │   ├── routes_policies.py    # Policy configuration and validation
 │   │   ├── routes_conflicts.py   # Conflict detection and resolution
-│   │   ├── routes_sync.py        # Synchronization pipeline
-│   │   ├── routes_query.py       # SQL console execution
-│   │   ├── routes_benchmark.py   # Research evaluation metrics (SCR, latency)
-│   │   └── routes_seed.py        # Demo workload seeders
-│   ├── engine/                   # Domain-agnostic semantic core
+│   │   ├── routes_quarantine.py  # Foreign-key quarantine inspection & relinking
+│   │   ├── routes_sync.py        # Synchronization, compaction, and checkpoints
+│   │   └── routes_benchmark.py   # Benchmark execution and artifact downloads
+│   ├── engine/                   # Core synchronization engine
 │   │   ├── schema_inspector.py   # SQLite PRAGMA introspection
-│   │   ├── policy_registry.py    # Registry for SUM, AVG, APPEND, LWW, REJECT, etc.
-│   │   ├── policy_validator.py   # Type compatibility verification
-│   │   ├── conflict_detector.py  # Three-way replica divergence detection
-│   │   ├── semantic_resolver.py  # Deterministic merge policy execution
-│   │   ├── merge_manager.py      # Result persistence & review tracking
-│   │   └── crdt_sync.py          # HLC & multi-replica sync engine
-│   ├── workloads/                # Benchmark workloads & ground-truth datasets
-│   │   ├── base_workload.py      # Abstract base workload template
+│   │   ├── policy_registry.py    # Policy catalog and metadata
+│   │   ├── policy_validator.py   # Fail-fast datatype validation
+│   │   ├── crdt_sync.py          # Three-way CRDT reconciliation pipeline
+│   │   ├── fk_quarantine.py      # Foreign key quarantine isolation
+│   │   └── checkpoint_store.py   # Causal compaction and snapshot manifests
+│   ├── workloads/                # Benchmark workloads & stress harness
 │   │   ├── inventory_workload.py # Stock counts, descriptions, SKU policies
 │   │   ├── notes_workload.py     # Document collaboration and author tracking
-│   │   └── health_workload.py    # Illustrative healthcare benchmark
-│   ├── tests/                    # Pytest test suite (56 automated tests)
-│   │   ├── test_schema.py
-│   │   ├── test_validation.py
-│   │   ├── test_resolution.py
-│   │   ├── test_sync.py
-│   │   ├── test_benchmark.py
-│   │   └── test_api.py
+│   │   ├── health_workload.py    # Clinical vital signs and blood type safety
+│   │   └── stress_harness.py     # Parametric stress matrix generator
+│   ├── tests/                    # 282 automated pytest test cases
 │   └── requirements.txt
-│
-├── frontend/                     # SemanticSync Studio (React 19 + Vite + Tailwind CSS)
+├── frontend/                     # SemanticSync Studio (React 19 + Vite + Tailwind)
 │   ├── src/
-│   │   ├── components/           # UI badges, buttons, cards, modals, layout
-│   │   ├── context/              # Global AppContext state management
-│   │   ├── services/api.js       # Centralized REST API service
-│   │   ├── views/                # Studio views (Dashboard, Schema, SQL, Conflicts, Sync, Benchmark)
-│   │   ├── App.jsx               # React Router configuration
-│   │   └── main.jsx              # React app entry point
+│   │   ├── components/           # UI components, layout, TopBar, Sidebar
+│   │   ├── context/              # AppContext global state management
+│   │   ├── services/api.js       # Typed REST API service layer
+│   │   ├── views/                # Views: Dashboard, Schema, Conflicts, Quarantine, Sync, Benchmark
+│   │   └── __tests__/            # 10 Vitest integration test cases
 │   ├── package.json
-│   ├── tailwind.config.js
 │   └── vite.config.js
-│
-└── data/                         # Local database storage (.db SQLite files)
+├── main.py                       # Unified server runner
+└── README.md
 ```
 
 ---
 
-## 🛠️ Getting Started
+## 🛠️ Getting Started & Installation
 
-### 1. Install Backend Dependencies
+### Prerequisites
+- **Python:** 3.10 or higher
+- **Node.js:** v18 or higher (with `npm`)
+- **SQLite:** 3.35 or higher (bundled with standard Python)
+
+### Step 1: Install Backend Dependencies
 ```bash
-pip install -r backend/requirements.txt
+python -m pip install -r backend/requirements.txt
 ```
 
-### 2. Install Frontend Dependencies
+### Step 2: Install Frontend Dependencies
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-### 3. Run Automated Tests
+---
+
+## 🧪 Reproducible Test Execution
+
+### Run Backend Pytest Suite (282 Tests)
+To execute all backend unit, integration, and property tests:
 ```bash
-pytest backend/tests/ -v
+python -m pytest backend/tests/ -v
+```
+*Expected result: 282 passed in ~65 seconds.*
+
+### Run Frontend Vitest Suite (10 Tests)
+To execute all frontend component and integration tests:
+```bash
+cd frontend
+npm test
+cd ..
+```
+*Expected result: 2 test files, 10 tests passed.*
+
+### Build Frontend Production Assets
+To verify clean compilation without linting or bundling errors:
+```bash
+cd frontend
+npm run build
+cd ..
 ```
 
-### 4. Start the Application
+---
 
-You can start both the backend API and the frontend Studio simultaneously using the unified runner, or start them in separate terminals:
+## 📊 Reproducible Benchmark Execution
 
-**Option A — Unified Runner (Starts both Backend & Frontend):**
+### 1. Domain Workloads Benchmark
+Run the comparative evaluation across Inventory, Notes, and Healthcare workloads:
+```bash
+python -c "from backend.workloads.inventory_workload import InventoryWorkload; w = InventoryWorkload(); w.setup(); print('Inventory ready')"
+```
+Alternatively, trigger benchmarks through the REST API:
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/benchmark/run -H "Content-Type: application/json" -d "{\"workload\": \"inventory\"}"
+```
+
+### 2. 3×3 Parametric Stress Benchmark
+Run the scaled parametric stress harness (e.g. 1,000 operations at 20% conflict density):
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/benchmark/stress -H "Content-Type: application/json" -d "{\"num_operations\": 1000, \"conflict_density\": 0.20, \"seed\": 42, \"export_artifacts\": true}"
+```
+Artifacts are automatically persisted as JSON and CSV in `data/benchmarks/` and can be retrieved via `GET /api/v1/benchmark/artifacts`.
+
+---
+
+## 💻 Running the Application
+
+### Option A — Unified Runner (Recommended)
+Starts both the FastAPI backend and the Vite frontend simultaneously:
 ```bash
 python main.py --with-frontend
 ```
 
-**Option B — Independent Processes:**
-- **Terminal 1 (Backend API):**
+### Option B — Separate Processes
+- **Backend Terminal:**
   ```bash
   python main.py
   ```
   - API Server: `http://127.0.0.1:8000`
-  - Swagger Documentation: `http://127.0.0.1:8000/docs`
+  - Interactive OpenAPI Docs: `http://127.0.0.1:8000/docs`
 
-- **Terminal 2 (Frontend Studio):**
+- **Frontend Terminal:**
   ```bash
   cd frontend
   npm run dev
   ```
   - Studio UI: `http://localhost:5173`
-  - All API calls (`/api/...`) are automatically proxied to `http://127.0.0.1:8000`.
+  - Automated proxy forwards `/api` requests to port `8000`.
 
 ---
 
-## 📜 REST API Contract Overview
+## 📜 REST API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/databases` | List registered databases |
-| `POST` | `/api/v1/databases` | Register a database |
-| `GET` | `/api/v1/databases/{id}/schema` | Inspect schema metadata |
-| `GET` | `/api/v1/databases/{id}/policies` | Return assigned semantic policies |
-| `PUT` | `/api/v1/databases/{id}/policies` | Batch update policy assignments |
-| `POST` | `/api/v1/validate-policy` | Validate policy against column datatype |
-| `POST` | `/api/v1/conflicts/detect` | Detect divergences across replicas |
-| `POST` | `/api/v1/conflicts/resolve` | Resolve conflict (auto / pick_a / pick_b / custom) |
-| `GET` | `/api/v1/conflicts` | List detected/pending conflicts |
-| `GET` | `/api/v1/sync/status` | Return synchronization status |
-| `POST` | `/api/v1/sync/run` | Execute synchronization pipeline |
-| `POST` | `/api/v1/query` | Execute SQLite SQL queries |
-| `POST` | `/api/v1/benchmark/run` | Run empirical benchmark comparison |
-| `GET` | `/api/v1/metrics` | Return benchmark evaluation metrics |
-| `POST` | `/api/v1/seed` | Seed demo workloads |
+| `GET` | `/api/v1/databases` | List all database workspaces |
+| `POST` | `/api/v1/databases` | Register a new database workspace |
+| `GET` | `/api/v1/databases/{id}/schema` | Introspect table and column metadata |
+| `GET` | `/api/v1/databases/{id}/policies` | Retrieve assigned semantic policies |
+| `PUT` | `/api/v1/databases/{id}/policies` | Batch update policy assignments with type validation |
+| `POST` | `/api/v1/validate-policy` | Validate single policy against column datatype |
+| `GET` | `/api/v1/conflicts` | List active divergences with row mutation models |
+| `POST` | `/api/v1/conflicts/resolve` | Resolve conflict (`auto`, `pick_a`, `pick_b`, `custom`) |
+| `GET` | `/api/v1/quarantine` | List orphaned child records in foreign key quarantine |
+| `POST` | `/api/v1/quarantine/{qid}/resolve`| Relink orphaned row to parent or confirm deletion |
+| `GET` | `/api/v1/sync/status` | Get synchronization engine and checkpoint status |
+| `POST` | `/api/v1/sync/run` | Execute 3-way synchronization with tombstone policy |
+| `POST` | `/api/v1/sync/checkpoint-store/initialize` | Provision or adopt durable checkpoint journal |
+| `POST` | `/api/v1/sync/compact` | Causal compaction up to common replica ACK horizon |
+| `POST` | `/api/v1/query` | Execute SQL queries in SQLite console |
+| `POST` | `/api/v1/benchmark/run` | Run domain workload benchmark |
+| `POST` | `/api/v1/benchmark/stress` | Run parametric stress benchmark |
+| `GET` | `/api/v1/benchmark/artifacts` | List recorded JSON/CSV benchmark artifacts |
+| `GET` | `/api/v1/benchmark/artifacts/{file}` | Download specific benchmark artifact file |
+
+---
+
+## ⚠️ Known Operational Boundaries & Limitations
+
+In accordance with strict scientific integrity, SemanticSync explicitly documents its boundaries:
+1. **Single-Process Coordination:** Database mutations and causal log compactions are protected by an in-process serialized lock (`mutation_lock.py`). The system is optimized as an embedded edge middleware rather than a multi-process distributed server.
+2. **Direct SQL File Bypass:** Writing to a replica SQLite file directly with external tools without the SemanticSync CDC triggers active will bypass change logging and cause divergence.
+3. **Single-Column Primary Keys:** Synchronization requires tables to have a single-column primary key. Tables with composite primary keys are safely skipped (`skipped_tables`).
+4. **Quarantine Review Requirement:** Quarantined rows prevent cascade corruption but remain isolated in `_ss_quarantine` until an administrator relinks or archives them.
+5. **Synthetic Resolver Benchmark Scope:** Benchmarks evaluate resolver accuracy against generated divergence pairs; they do not certify arbitrary distributed mesh convergence across cyclic partition schedules.
+
+---
+
+## 📄 License
+Academic and Research Open Source License.

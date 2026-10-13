@@ -1,13 +1,52 @@
 import React, { useState } from 'react';
-import { Database, RefreshCw, Sparkles, ExternalLink, Activity } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Database, RefreshCw, Sparkles, ExternalLink, Activity, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Button } from '../ui/Button';
 import { api } from '../../services/api';
 
 export function TopBar() {
-  const { databases, selectedDbId, setSelectedDbId, backendHealthy, refreshState } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const {
+    databases,
+    selectedDbId,
+    setSelectedDbId,
+    backendHealthy,
+    refreshState,
+    isRefreshing,
+    refreshFeedback,
+    unsavedChanges,
+    setUnsavedChanges,
+    unsavedMessage,
+  } = useApp();
+
   const [seeding, setSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(null);
+
+  const handleWorkspaceChange = (newDbId) => {
+    if (!newDbId || newDbId === selectedDbId) return;
+
+    if (unsavedChanges) {
+      const confirmSwitch = window.confirm(
+        unsavedMessage || 'You have unsaved changes. Switching workspaces will discard them. Do you want to proceed?'
+      );
+      if (!confirmSwitch) {
+        return;
+      }
+      setUnsavedChanges(false);
+    }
+
+    setSelectedDbId(newDbId);
+
+    // If currently on a workspace-specific subroute, update URL path
+    const match = location.pathname.match(/^\/workspace\/[^/]+(\/[^?]*)?$/);
+    if (match) {
+      const subPath = match[1] || '/schema';
+      navigate(`/workspace/${encodeURIComponent(newDbId)}${subPath}`);
+    }
+  };
 
   const handleSeed = async (workload) => {
     setSeeding(true);
@@ -28,14 +67,16 @@ export function TopBar() {
     <header className="h-14 bg-white border-b border-border px-6 flex items-center justify-between flex-shrink-0 z-10">
       {/* Left: Active Workspace Selector */}
       <div className="flex items-center gap-3">
-        <label className="text-xs font-semibold text-text-secondary flex items-center gap-1.5 uppercase tracking-wider">
+        <label htmlFor="workspace-select" className="text-xs font-semibold text-text-secondary flex items-center gap-1.5 uppercase tracking-wider">
           <Database className="w-3.5 h-3.5 text-primary" />
           <span>Workspace:</span>
         </label>
         <select
+          id="workspace-select"
+          aria-label="Active Workspace"
           value={selectedDbId || ''}
-          onChange={(e) => setSelectedDbId(e.target.value)}
-          className="text-xs font-medium bg-gray-50 border border-border rounded-md px-3 py-1.5 text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+          onChange={(e) => handleWorkspaceChange(e.target.value)}
+          className="text-xs font-medium bg-gray-50 border border-border rounded-md px-3 py-1.5 text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer"
         >
           {databases.length === 0 ? (
             <option value="">No databases registered</option>
@@ -47,9 +88,29 @@ export function TopBar() {
             ))
           )}
         </select>
+
         {seedSuccess && (
-          <span className="text-xs text-success bg-success-light px-2 py-0.5 rounded-sm font-medium animate-fade-in">
-            {seedSuccess}
+          <span className="text-xs text-success bg-success-light px-2 py-0.5 rounded-sm font-medium animate-fade-in flex items-center gap-1">
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>{seedSuccess}</span>
+          </span>
+        )}
+
+        {/* Global Refresh Feedback Toast */}
+        {refreshFeedback && (
+          <span
+            className={`text-xs px-2.5 py-0.5 rounded-sm font-medium animate-fade-in flex items-center gap-1.5 transition-all ${
+              refreshFeedback.type === 'success'
+                ? 'bg-success-light text-success border border-success/30'
+                : 'bg-danger-light text-danger border border-danger/30'
+            }`}
+          >
+            {refreshFeedback.type === 'success' ? (
+              <CheckCircle className="w-3.5 h-3.5" />
+            ) : (
+              <AlertTriangle className="w-3.5 h-3.5" />
+            )}
+            <span>{refreshFeedback.message}</span>
           </span>
         )}
       </div>
@@ -96,15 +157,18 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Refresh State */}
+        {/* Global Refresh Button */}
         <Button
           size="sm"
           variant="ghost"
           icon={RefreshCw}
-          onClick={refreshState}
-          title="Refresh workspaces and sync telemetry"
+          loading={isRefreshing}
+          disabled={isRefreshing}
+          onClick={() => refreshState()}
+          title="Refresh server telemetry and active view data"
+          aria-label="Refresh application state"
         >
-          Refresh
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
 
         {/* API Health Pill */}

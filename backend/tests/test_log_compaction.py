@@ -1024,6 +1024,4 @@ def test_committed_checkpoint_snapshot_binding_fails_before_ack_or_prune(tmp_pat
     for replica_id, path in paths.items():
         assert _hot_log_state(path) == before_logs[replica_id], "invalid snapshot must not prune hot logs"
         with connect_with_foreign_keys(path) as conn:
-            assert conn.execute("SELECT COUNT(*) FROM _ss_compacted_receipts").fetchone()[0] == 0
-
-\n
+            assert conn.execute("SELECT COUNT(*) FROM _ss_compacted_receipts").fetchone()[0] == 0

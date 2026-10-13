@@ -10,6 +10,7 @@ import { SqlConsole } from './views/SqlConsole';
 import { ReplicaManager } from './views/ReplicaManager';
 import { Conflicts } from './views/Conflicts';
 import { SyncHub } from './views/SyncHub';
+import { Quarantine } from './views/Quarantine';
 import { Analytics } from './views/Analytics';
 import { Settings } from './views/Settings';
 
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/workspace/:dbId/sql" element={<SqlConsole />} />
             <Route path="/workspace/:dbId/replicas" element={<ReplicaManager />} />
             <Route path="/conflicts" element={<Conflicts />} />
+            <Route path="/quarantine" element={<Quarantine />} />
             <Route path="/sync" element={<SyncHub />} />
             <Route path="/benchmark" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />

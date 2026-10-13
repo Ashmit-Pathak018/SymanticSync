@@ -32,7 +32,7 @@ const SAMPLE_QUERIES = [
 export function SqlConsole() {
   const { dbId } = useParams();
   const [searchParams] = useSearchParams();
-  const { databases, setSelectedDbId } = useApp();
+  const { databases, selectedDbId, setSelectedDbId, refreshCounter } = useApp();
 
   const [replicas, setReplicas] = useState([]);
   const [selectedTarget, setSelectedTarget] = useState('base'); // 'base' or replica_id
@@ -43,30 +43,47 @@ export function SqlConsole() {
   const [error, setError] = useState(null);
   const [history, setHistory] = useState([]);
 
-  useEffect(() => {
-    if (dbId) setSelectedDbId(dbId);
-  }, [dbId, setSelectedDbId]);
+  const replicaRequestIdRef = React.useRef(0);
 
-  // Load replicas for this DB
+  useEffect(() => {
+    if (dbId && dbId !== selectedDbId) {
+      setSelectedDbId(dbId);
+    }
+  }, [dbId, selectedDbId, setSelectedDbId]);
+
+  // Clear previous query results when switching databases
+  useEffect(() => {
+    setResult(null);
+    setError(null);
+    setSelectedTarget('base');
+  }, [dbId]);
+
+  // Load replicas for this DB whenever dbId or refreshCounter changes
   useEffect(() => {
     async function loadReplicas() {
       if (!dbId) return;
+      const reqId = ++replicaRequestIdRef.current;
       try {
         const reps = await api.getReplicas(dbId);
-        setReplicas(Array.isArray(reps) ? reps : []);
+        if (reqId !== replicaRequestIdRef.current) return;
+        const repList = Array.isArray(reps) ? reps : [];
+        setReplicas(repList);
+
         // Check URL query param for replica
         const repParam = searchParams.get('replica');
-        if (repParam && reps.some((r) => r.replica_id === repParam)) {
+        if (repParam && repList.some((r) => r.replica_id === repParam)) {
           setSelectedTarget(repParam);
         } else {
           setSelectedTarget('base');
         }
       } catch (err) {
-        console.error('Failed to load replicas:', err);
+        if (reqId === replicaRequestIdRef.current) {
+          console.error('Failed to load replicas:', err);
+        }
       }
     }
     loadReplicas();
-  }, [dbId, searchParams]);
+  }, [dbId, searchParams, refreshCounter]);
 
   // Load history from localStorage
   useEffect(() => {

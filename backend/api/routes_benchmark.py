@@ -13,6 +13,7 @@ GET  /api/v1/metrics       → Get latest benchmark metrics and telemetry
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -23,7 +24,7 @@ from backend.api.models import (
     StressBenchmarkMetrics,
     StressBenchmarkRequest,
 )
-from backend.api.state import app_state
+from backend.api.state import DATA_DIR, app_state
 from backend.engine.semantic_resolver import SemanticResolver
 from backend.workloads.health_workload import HealthWorkload
 from backend.workloads.inventory_workload import InventoryWorkload
@@ -158,7 +159,7 @@ def run_stress_benchmark(body: StressBenchmarkRequest) -> StressBenchmarkMetrics
             detail="conflict_density must be 0.05, 0.20, or 0.50.",
         )
 
-    out_dir = str(app_state.data_dir / "benchmarks") if body.export_artifacts else None
+    out_dir = str(DATA_DIR / "benchmarks") if body.export_artifacts else None
     cfg = StressBenchmarkConfig(
         num_operations=body.num_operations,
         conflict_density=body.conflict_density,
@@ -172,3 +173,80 @@ def run_stress_benchmark(body: StressBenchmarkRequest) -> StressBenchmarkMetrics
     app_state.set_metrics("stress_latest", result.to_dict())
 
     return StressBenchmarkMetrics(**result.to_dict())
+
+
+def get_artifact_dirs() -> list[Path]:
+    """Return search directories for benchmark matrix artifacts."""
+    return [
+        Path(".codex-phase4-optimized-matrix-20261013"),
+        DATA_DIR / "benchmarks",
+        Path(".codex-phase4-matrix-20261013"),
+    ]
+
+
+@router.get("/benchmark/artifacts", status_code=200)
+def list_benchmark_artifacts() -> list[dict[str, Any]]:
+    """List available benchmark JSON and CSV artifacts across known artifact folders."""
+    dirs = get_artifact_dirs()
+    seen = set()
+    artifacts = []
+    for d in dirs:
+        if not d.exists():
+            continue
+        for p in sorted(d.glob("benchmark_*.*")):
+            if p.name in seen or p.suffix.lower() not in (".json", ".csv"):
+                continue
+            seen.add(p.name)
+            stat = p.stat()
+            ops = None
+            density = None
+            seed = None
+            parts = p.stem.split("_")
+            if len(parts) >= 4 and parts[0] == "benchmark":
+                try:
+                    ops = int(parts[1])
+                    if parts[2].endswith("pct"):
+                        density = int(parts[2][:-3])
+                    seed = int(parts[3])
+                except (ValueError, IndexError):
+                    pass
+            artifacts.append({
+                "filename": p.name,
+                "format": p.suffix.lower().lstrip("."),
+                "size_bytes": stat.st_size,
+                "modified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_mtime)),
+                "num_operations": ops,
+                "conflict_density_pct": density,
+                "seed": seed,
+                "source_dir": str(d),
+            })
+    return artifacts
+
+
+@router.get("/benchmark/artifacts/{filename}")
+def download_benchmark_artifact(filename: str):
+    """Download or view a specific benchmark artifact."""
+    from fastapi.responses import FileResponse
+
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    dirs = get_artifact_dirs()
+    target_path = None
+    for d in dirs:
+        p = Path(d) / filename
+        if p.exists() and p.is_file():
+            target_path = p
+            break
+
+    if not target_path:
+        raise HTTPException(status_code=404, detail=f"Artifact '{filename}' not found.")
+
+    media_type = "application/json" if filename.endswith(".json") else "text/csv"
+    return FileResponse(
+        str(target_path),
+        media_type=media_type,
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

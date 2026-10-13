@@ -595,8 +595,4 @@ def test_valid_bounded_resolution_relay_is_idempotent(tmp_path):
             (resolve_id,),
         ).fetchall()
         assert len(receipts_after) == 1
-        assert receipts_after[0][1] == 0 and receipts_after[0][2] == 100
-
-
-
-\n
+        assert receipts_after[0][1] == 0 and receipts_after[0][2] == 100
