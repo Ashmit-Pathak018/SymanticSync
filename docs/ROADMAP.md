@@ -60,7 +60,7 @@ v1.0.0  📋  Phase 7: Studio Hardening, Artifact Release & Research Publication
 - Persist exact per-replica operation acknowledgements and apply the strict HLC horizon only after operation-ID and dependency evidence.
 - Use an explicitly initialized SQLite checkpoint journal, full payload archive, hashed per-replica snapshots, fail-closed validation, and idempotent recovery around per-replica pruning.
 - Share a single-process lock between tracked mutations and snapshot capture. Existing replica files cannot be overwritten during reseeding; returning offline tails require separate-path recovery and review.
-- **Phase 6 remains unsigned pending implementation review.** See `IMPLEMENTATION_PLAN.md` and `KNOWN_LIMITATIONS.md` for current test evidence and unsupported cross-process, power-loss, and offline-tail cases.
+- **Phase 6 approved and signed off for the documented tested scope (2026-10-13).** RESOLVE-tail recovery requires manual review; coordination is single-process; power-loss durability is not certified. See `IMPLEMENTATION_PLAN.md`, `TRACEABILITY_MATRIX.md`, and `KNOWN_LIMITATIONS.md` for the reported verification and scope.
 
 ### Research Release: v1.0.0 (Phase 7 — Academic Manuscript & Open Source Release)
 - Studio telemetry dashboard hooks for all metrics.
