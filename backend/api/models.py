@@ -213,24 +213,30 @@ class BenchmarkRequest(BaseModel):
 
 
 class BenchmarkMetrics(BaseModel):
-    """Comparative evaluation metrics: SemanticSync vs. generic LWW baseline."""
+    """Development-only domain runner status; it is not a validated comparison."""
 
     workload: str
-    baseline_scr: float = Field(..., description="Semantic Correctness Rate for LWW baseline.")
-    semantic_sync_scr: float = Field(..., description="Semantic Correctness Rate for SemanticSync.")
-    baseline_convergence_rate: float
-    semantic_sync_convergence_rate: float
-    resolution_overhead_ms: float
-    total_conflicts_evaluated: int
-    correct_semantic_outcomes: int
+    evaluation_status: str = Field(
+        "illustrative_unvalidated",
+        description="This resolver-only domain runner is excluded from empirical comparisons.",
+    )
+    explanation: str
+    baseline_scr: float | None = None
+    semantic_sync_scr: float | None = None
+    baseline_convergence_rate: float | None = None
+    semantic_sync_convergence_rate: float | None = None
+    resolution_overhead_ms: float | None = None
+    total_conflicts_evaluated: int | None = None
+    correct_semantic_outcomes: int | None = None
 
 
 class StressBenchmarkRequest(BaseModel):
     """Body for POST /api/v1/benchmark/stress."""
 
     num_operations: int = Field(1000, description="1000, 5000, or 10000 operations.")
-    conflict_density: float = Field(0.20, description="0.05, 0.20, or 0.50 conflict density.")
+    conflict_density: float = Field(0.20, description="0, 0.05, 0.20, or 0.50 conflict density.")
     seed: int = Field(42, description="Random seed for reproducibility.")
+    trials: int = Field(2, ge=2, le=10, description="Paired trials; system execution order alternates.")
     export_artifacts: bool = Field(True, description="Whether to export JSON/CSV benchmark artifacts.")
 
 
@@ -242,25 +248,29 @@ class StressBenchmarkMetrics(BaseModel):
     num_operations: int
     conflict_density: float
     total_conflicts_evaluated: int
-    baseline_scr: float
-    semantic_sync_scr: float
-    baseline_convergence_rate: float
-    semantic_sync_convergence_rate: float
+    baseline_scr: float | None
+    semantic_sync_scr: float | None
+    baseline_row_value_agreement_rate: float
+    semantic_sync_row_value_agreement_rate: float
     p50_latency_ms: float
     p95_latency_ms: float
     p99_latency_ms: float
     avg_latency_ms: float
     total_sync_time_ms: float
-    resolution_overhead_ms: float
+    resolution_overhead_ms: float = Field(
+        ..., description="Legacy name for SemanticSync batch sync minus LWW batch sync; not resolver-only time."
+    )
     change_log_entries: int
     artifacts: dict[str, str] = Field(default_factory=dict)
-    baseline_vra: float = 0.0
-    semantic_sync_vra: float = 0.0
+    baseline_vra: float | None = None
+    semantic_sync_vra: float | None = None
     baseline_sync_time_ms: float = 0.0
     semantic_sync_sync_time_ms: float = 0.0
     baseline_change_log_entries: int = 0
     semantic_sync_change_log_entries: int = 0
     workload_digest: str = ""
+    trial_count: int = 1
+    summary_statistics: dict[str, Any] = Field(default_factory=dict)
 
 
 # ─────────────────────────────────────────────

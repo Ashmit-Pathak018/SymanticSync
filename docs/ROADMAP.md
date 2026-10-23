@@ -15,8 +15,8 @@ v0.3.0  ✅  Phase 1: Core Correctness & Generated Adversarial Tests (tested sco
 v0.4.0  ✅  Phase 2: Row-Mutation Model verified for approved manual INSERT-collision criteria
 v0.5.0  ✅  Phase 3: BOUNDED_SUM invariant safety & selected N-replica schedules (tested scope)
 v0.6.0  ✅  Phase 4: Real replica benchmark matrix and measured performance gate (tested scope)
-v0.7.0  ✅  Phase 5: FK write-path integrity verified for tested scope (27 FK tests; full suite 241)
-v0.8.0  🚧  Phase 6: Causal Stability Change-Log Compaction (implemented for tested scope; review pending)
+v0.7.0  ✅  Phase 5: FK write-path integrity verified for tested scope (latest focused audit: 34 passed; full-suite count 241 is historical)
+v0.8.0  ✅  Phase 6: Causal Stability Change-Log Compaction (approved for documented tested scope)
 v1.0.0  📋  Phase 7: Studio Hardening, Artifact Release & Research Publication
 ```
 
@@ -45,7 +45,7 @@ v1.0.0  📋  Phase 7: Studio Hardening, Artifact Release & Research Publication
 
 ### Scaled Evaluation Milestone: v0.6.0 (Phase 4 — Scaled Benchmark Suite)
 - Run actual tracked writes and `sync_replicas()` on isolated SQLite replicas for 1,000, 5,000, and 10,000 operations at 5%, 20%, and 50% conflicts.
-- Compare the same seeded operations under LWW baseline and SemanticSync SUM; compute SCR/VRA from an explicit oracle and CR from persisted replica rows.
+- Compare the same seeded operations under LWW baseline and SemanticSync SUM; compute conflict-only SCR from the explicit oracle. Report benchmark-row value agreement separately; it compares only `bench_rows.value`, not complete replica state. Stress VRA is N/A because no domain range/FK constraints are modeled.
 - Measure tracked-write p50/p95/p99, actual sync time, delta overhead, and change-log counts; export raw workload, observations, and metrics to JSON and metrics/timings to CSV.
 - The optimized 3×3 matrix ran real tracked writes and syncs and exported observations/metrics. Savepoint-batched receiver replay reduced the seed-42 5,000-op/20%-conflict case from 62.52 s to 16.097 s; two repeated same-seed runs measured 15.817 s and 15.915 s. All three meet the under-30-second/1,000-conflict gate. Phase 4 is verified for this tested synthetic SUM scope only; this does not establish general convergence or production capacity.
 
@@ -54,13 +54,13 @@ v1.0.0  📋  Phase 7: Studio Hardening, Artifact Release & Research Publication
 - Atomically quarantine nested dependent rows before parent deletion; verify FK integrity before committing.
 - Discover grouped/composite FK mappings and alternate unique referenced columns; reject unsupported identities before mutation.
 - Relink by restoring the actual quarantined child under a verified parent; mark resolved only after successful insert and FK validation.
-- Historical Phase 5 gate passed 241 tests, including 27 FK invariants; the earlier post-Phase 6 suite had 253 passes, and the current full backend suite has 262 passes. Local tracked, received, paired, and API resolution writes, rollback, nested dependencies, alternate UNIQUE references, composite child keys, duplicate delivery, restart, and safe relink are verified. Composite-PK mutation targets are rejected before mutation. Direct SQL does not enter the quarantine workflow; FK checks prevent invalid deletes on the guarded SQL console connection.
+- A historical Phase 5 gate reported 241 backend passes, including 27 FK tests. In the 2026-10-15 claim audit, the focused FK suite passed 34 tests in 1.40s; the full backend suite was not completed, so the 241 count remains historical. Earlier post-Phase 6 counts of 253 and 262 are also historical, not current verification. Local tracked, received, paired, and API resolution writes, rollback, nested dependencies, alternate UNIQUE references, composite child keys, duplicate delivery, restart, and safe relink are covered in selected cases. Composite-PK mutation targets are rejected before mutation. Direct SQL does not enter the quarantine workflow; FK checks prevent invalid deletes on the guarded SQL console connection.
 
 ### Operational Hardening: v0.8.0 (Phase 6 — Causal Log Compaction)
 - Persist exact per-replica operation acknowledgements and apply the strict HLC horizon only after operation-ID and dependency evidence.
 - Use an explicitly initialized SQLite checkpoint journal, full payload archive, hashed per-replica snapshots, fail-closed validation, and idempotent recovery around per-replica pruning.
 - Share a single-process lock between tracked mutations and snapshot capture. Existing replica files cannot be overwritten during reseeding; returning offline tails require separate-path recovery and review.
-- **Phase 6 approved and signed off for the documented tested scope (2026-10-13).** RESOLVE-tail recovery requires manual review; coordination is single-process; power-loss durability is not certified. See `IMPLEMENTATION_PLAN.md`, `TRACEABILITY_MATRIX.md`, and `KNOWN_LIMITATIONS.md` for the reported verification and scope.
+- **Phase 6 complete for the documented tested scope (2026-10-15).** Original user-reported results: focused `test_log_compaction.py` **41 passed in 3.30s**; full backend suite **309 passed, 1 warning in 75.06s**. Supplemental local verification on 2026-10-20 completed with **42 focused tests passed in 4.41s** and **332 backend tests passed, 1 warning in 77.43s**. This is not a new acceptance audit or scope expansion. RESOLVE-tail recovery requires manual review; coordination is single-process; power-loss durability is not certified; no general convergence guarantee is made. Phase 7 remains unchanged and has not started. See `IMPLEMENTATION_PLAN.md`, `TRACEABILITY_MATRIX.md`, and `KNOWN_LIMITATIONS.md` for tested scope and evidence.
 
 ### Research Release: v1.0.0 (Phase 7 — Academic Manuscript & Open Source Release)
 - Studio telemetry dashboard hooks for all metrics.

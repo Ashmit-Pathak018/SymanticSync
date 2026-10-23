@@ -111,3 +111,17 @@ def test_reject_policy():
     res = SemanticResolver.resolve("REJECT", base_value="A+", replica_a_value="A+", replica_b_value="O+")
     assert res.status == "flagged"
     assert res.resolved_value is None
+
+def test_lww_missing_timestamp_falls_back_to_replica_id():
+    # If either timestamp is absent, selection uses replica IDs, even if the
+    # one supplied timestamp is numerically greater.
+    result = SemanticResolver.resolve(
+        "LWW",
+        replica_a_value="a",
+        replica_b_value="b",
+        replica_a_id="a-replica",
+        replica_b_id="z-replica",
+        replica_a_ts=999.0,
+        replica_b_ts=None,
+    )
+    assert result.resolved_value == "b"

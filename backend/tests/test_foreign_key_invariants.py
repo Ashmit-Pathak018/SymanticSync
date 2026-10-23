@@ -532,6 +532,177 @@ class TestAdditionalFKPaths:
                 assert c.execute("SELECT COUNT(*) FROM _ss_quarantine WHERE table_name='items'").fetchone()[0] == 2
                 assert c.execute("SELECT COUNT(*) FROM depts WHERE dept_id=1").fetchone()[0] == 0
 
+    def test_received_resolve_delete_quarantines_cascade_dependents(self, tmp_path):
+        base = tmp_path / "resolve_cascade_base.db"
+        with sqlite3.connect(base) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+                CREATE TABLE child (id INTEGER PRIMARY KEY, parent_code TEXT NOT NULL
+                    REFERENCES parent(code) ON DELETE CASCADE);
+                INSERT INTO parent VALUES (1, 'P-1');
+                INSERT INTO child VALUES (10, 'P-1');
+            """)
+        engine = CRDTSyncEngine(str(base), str(tmp_path / "resolve_cascade_data"))
+        a, b, c = (engine.create_replica(rid) for rid in ("resolve_a", "resolve_b", "resolve_c"))
+        engine._write_resolved_pair(a, "resolve_a", b, "resolve_b", "parent", 1, "*", None, "delete")
+
+        result = engine.sync_replicas(a, c, str(base), "resolve_a", "resolve_c", policies={})
+        assert result.rejected_operations == []
+        with sqlite3.connect(c) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM parent").fetchone()[0] == 0
+            assert conn.execute("SELECT COUNT(*) FROM child").fetchone()[0] == 0
+            records = list_quarantined(conn, table_name="child")
+            assert len(records) == 1
+            assert json.loads(records[0]["row_payload"]) == {"id": 10, "parent_code": "P-1"}
+            assert conn.execute("SELECT COUNT(*) FROM _ss_change_log WHERE op_type='RESOLVE'").fetchone()[0] == 1
+            verify_fk_integrity(conn)
+        engine.sync_replicas(a, c, str(base), "resolve_a", "resolve_c", policies={})
+        with sqlite3.connect(c) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM _ss_quarantine WHERE table_name='child'").fetchone()[0] == 1
+            assert conn.execute("SELECT COUNT(*) FROM _ss_change_log WHERE op_type='RESOLVE'").fetchone()[0] == 1
+
+    def test_tracked_parent_unique_key_update_obeys_fk_action_and_syncs(self, tmp_path):
+        base = tmp_path / "parent_key_update.db"
+        with sqlite3.connect(base) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+                CREATE TABLE child (id INTEGER PRIMARY KEY, parent_code TEXT NOT NULL
+                    REFERENCES parent(code) ON UPDATE CASCADE);
+                INSERT INTO parent VALUES (1, 'P-1');
+                INSERT INTO child VALUES (10, 'P-1');
+            """)
+        engine = CRDTSyncEngine(str(base), str(tmp_path / "parent_key_data"))
+        source, target = engine.create_replica("key_source"), engine.create_replica("key_target")
+        engine.apply_change(source, "key_source", "parent", 1, "code", "P-2")
+        engine.sync_replicas(source, target, str(base), "key_source", "key_target", policies={})
+
+        for path in (source, target):
+            with sqlite3.connect(path) as c:
+                assert c.execute("SELECT code FROM parent WHERE id=1").fetchone() == ("P-2",)
+                assert c.execute("SELECT parent_code FROM child WHERE id=10").fetchone() == ("P-2",)
+                assert c.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='_ss_quarantine'").fetchone()[0] == 0
+                verify_fk_integrity(c)
+
+    def test_tracked_parent_key_update_without_cascade_is_rejected_atomically(self, tmp_path):
+        base = tmp_path / "parent_key_no_action.db"
+        with sqlite3.connect(base) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+                CREATE TABLE child (id INTEGER PRIMARY KEY, parent_code TEXT NOT NULL REFERENCES parent(code));
+                INSERT INTO parent VALUES (1, 'P-1');
+                INSERT INTO child VALUES (10, 'P-1');
+            """)
+        engine = CRDTSyncEngine(str(base), str(tmp_path / "parent_key_no_action_data"))
+        replica = engine.create_replica("key_no_action")
+        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+            engine.apply_change(replica, "key_no_action", "parent", 1, "code", "P-2")
+        with sqlite3.connect(replica) as c:
+            assert c.execute("SELECT code FROM parent WHERE id=1").fetchone() == ("P-1",)
+            assert c.execute("SELECT parent_code FROM child WHERE id=10").fetchone() == ("P-1",)
+            assert c.execute("SELECT COUNT(*) FROM _ss_change_log").fetchone()[0] == 0
+
+    def test_engine_delete_with_alternate_unique_parent_and_composite_dependents(self, tmp_path):
+        base = tmp_path / "alternate_engine.db"
+        with sqlite3.connect(base) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+                CREATE TABLE child (x INTEGER, y INTEGER, parent_code TEXT,
+                    PRIMARY KEY(x,y), FOREIGN KEY(parent_code) REFERENCES parent(code));
+                CREATE TABLE leaf (id INTEGER PRIMARY KEY, child_x INTEGER, child_y INTEGER,
+                    FOREIGN KEY(child_x,child_y) REFERENCES child(x,y));
+                INSERT INTO parent VALUES(1,'P-A');
+                INSERT INTO child VALUES(4,5,'P-A');
+                INSERT INTO leaf VALUES(7,4,5);
+            """)
+        engine = CRDTSyncEngine(str(base), str(tmp_path / "alternate_engine_data"))
+        replica = engine.create_replica("alternate_engine")
+        engine.apply_delete(replica, "alternate_engine", "parent", 1)
+        with sqlite3.connect(replica) as c:
+            records = list_quarantined(c)
+            assert {r["table_name"] for r in records} == {"child", "leaf"}
+            assert json.loads(next(r["row_payload"] for r in records if r["table_name"] == "child")) == {
+                "x": 4, "y": 5, "parent_code": "P-A"
+            }
+            assert c.execute("SELECT COUNT(*) FROM parent").fetchone()[0] == 0
+            assert c.execute("SELECT COUNT(*) FROM child").fetchone()[0] == 0
+            assert c.execute("SELECT COUNT(*) FROM leaf").fetchone()[0] == 0
+            verify_fk_integrity(c)
+
+    def test_without_rowid_dependent_schema_rejects_parent_delete_atomically(self, tmp_path):
+        base = tmp_path / "without_rowid.db"
+        with sqlite3.connect(base) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY, code TEXT UNIQUE NOT NULL);
+                CREATE TABLE child (x INTEGER, parent_code TEXT NOT NULL,
+                    PRIMARY KEY(x), FOREIGN KEY(parent_code) REFERENCES parent(code)) WITHOUT ROWID;
+                INSERT INTO parent VALUES(1, 'P-1');
+                INSERT INTO child VALUES(10, 'P-1');
+            """)
+        engine = CRDTSyncEngine(str(base), str(tmp_path / "without_rowid_data"))
+        replica = engine.create_replica("without_rowid")
+        with pytest.raises(sqlite3.OperationalError, match="rowid"):
+            engine.apply_delete(replica, "without_rowid", "parent", 1)
+        with sqlite3.connect(replica) as c:
+            assert c.execute("SELECT COUNT(*) FROM parent WHERE id=1").fetchone()[0] == 1
+            assert c.execute("SELECT COUNT(*) FROM child WHERE x=10").fetchone()[0] == 1
+            assert c.execute("SELECT COUNT(*) FROM _ss_change_log WHERE op_type='DELETE'").fetchone()[0] == 0
+
+    def test_sql_console_base_write_requires_opt_in_and_still_enforces_fk(self, tmp_path, monkeypatch):
+        from fastapi import HTTPException
+
+        from backend.api.models import QueryRequest
+        from backend.api.routes_query import execute_query
+        from backend.api.state import app_state
+
+        db = tmp_path / "query_fk.db"
+        with sqlite3.connect(db) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY);
+                CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parent(id));
+                INSERT INTO parent VALUES (1);
+                INSERT INTO child VALUES (10, 1);
+            """)
+        monkeypatch.setattr(app_state, "get_db", lambda _db_id: {"path": str(db)})
+        default_request = QueryRequest(db_id="query_fk", sql="DELETE FROM parent WHERE id=1")
+        with pytest.raises(HTTPException) as readonly_error:
+            execute_query(default_request)
+        assert readonly_error.value.status_code == 400
+        with sqlite3.connect(db) as c:
+            assert c.execute("SELECT COUNT(*) FROM parent WHERE id=1").fetchone()[0] == 1
+
+        opted_in = QueryRequest(db_id="query_fk", sql="DELETE FROM parent WHERE id=1", allow_write=True)
+        with pytest.raises(HTTPException) as fk_error:
+            execute_query(opted_in)
+        assert fk_error.value.status_code == 400
+        assert "foreign key constraint failed" in str(fk_error.value.detail).casefold()
+        with sqlite3.connect(db) as c:
+            assert c.execute("SELECT COUNT(*) FROM parent WHERE id=1").fetchone()[0] == 1
+            assert c.execute("SELECT COUNT(*) FROM child WHERE parent_id=1").fetchone()[0] == 1
+
+    def test_sql_console_declared_cascade_does_not_create_quarantine_record(self, tmp_path, monkeypatch):
+        from backend.api.models import QueryRequest
+        from backend.api.routes_query import execute_query
+        from backend.api.state import app_state
+
+        db = tmp_path / "query_cascade.db"
+        with sqlite3.connect(db) as c:
+            c.executescript("""
+                CREATE TABLE parent (id INTEGER PRIMARY KEY);
+                CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL
+                    REFERENCES parent(id) ON DELETE CASCADE);
+                INSERT INTO parent VALUES (1);
+                INSERT INTO child VALUES (10, 1);
+            """)
+        monkeypatch.setattr(app_state, "get_db", lambda _db_id: {"path": str(db)})
+        result = execute_query(QueryRequest(
+            db_id="query_cascade", sql="DELETE FROM parent WHERE id=1", allow_write=True
+        ))
+        assert result.rows == [[1]]
+        with sqlite3.connect(db) as c:
+            assert c.execute("SELECT COUNT(*) FROM parent").fetchone()[0] == 0
+            assert c.execute("SELECT COUNT(*) FROM child").fetchone()[0] == 0
+            assert c.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='_ss_quarantine'").fetchone()[0] == 0
+
     def test_api_resolution_delete_quarantines_both_replicas(self, engine_db, tmp_path):
         from backend.api.routes_conflicts import _write_resolution_atomically
         engine = CRDTSyncEngine(base_db_path=str(engine_db), data_dir=str(tmp_path / "data"))

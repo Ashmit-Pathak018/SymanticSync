@@ -78,3 +78,9 @@ SemanticSync is designed as a modular middleware layer operating between applica
 ### 6. Merge Manager (`backend/engine/merge_manager.py`)
 - Persists detected conflicts and resolution histories.
 - Manages unmerged `flagged` conflict records for manual user review.
+
+### 7. Foreign-Key Enforcement and Quarantine (`fk_quarantine.py`)
+- Tracked mutation, receive, paired-resolution, and quarantine-recovery connections enable SQLite foreign keys before opening write transactions.
+- Supported parent-delete paths move declared dependent rows recursively into `_ss_quarantine` in the same transaction, then verify `PRAGMA foreign_key_check` before commit.
+- Parent-key updates follow the schema's declared SQLite `ON UPDATE` action; they are not quarantined. Unsupported target schemas (including composite parent keys and some `WITHOUT ROWID` dependent schemas) are rejected without committing a partial delete.
+- SQL-console connections also enable foreign keys, but their writes do not enter the tracked operation log or quarantine workflow and bypass the process mutation lock. External SQLite clients can bypass the process lock and may disable foreign keys per connection.

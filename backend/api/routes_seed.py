@@ -10,7 +10,6 @@ POST /api/v1/seed → Seed Inventory, Collaboration Notes, or Healthcare demo da
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +33,37 @@ def seed_workload(body: SeedRequest) -> dict[str, Any]:
     """
     wl = body.workload.strip().lower()
     targets = ["inventory", "notes", "health"] if wl == "all" else [wl]
+
+    if app_state.registry_load_error:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Demo seeding is blocked because persisted application state is not trusted: {app_state.registry_load_error}",
+        )
+
+    if any(name not in {"inventory", "notes", "health"} for name in targets):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown workload '{wl}'. Choose from 'inventory', 'notes', 'health', or 'all'.",
+        )
+
+    # Seeders replace the known sample rows. Refuse to run against an existing
+    # demo dataset so old tracked history cannot be paired with reset values.
+    existing = []
+    for name in targets:
+        target_dir = DATA_DIR / name
+        paths = [target_dir / f"{name}.db"] + [
+            target_dir / f"{name}_device_{suffix}.db" for suffix in ("a", "b", "c")
+        ]
+        if app_state.get_db(f"db_{name}") or any(path.exists() for path in paths):
+            existing.append(name)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Demo workload(s) already exist: {', '.join(existing)}. Seeding replaces sample rows, "
+                "so use a fresh SEMANTICSYNC_DATA_DIR for a clean demo instead of reseeding this directory."
+            ),
+        )
 
     created = []
 

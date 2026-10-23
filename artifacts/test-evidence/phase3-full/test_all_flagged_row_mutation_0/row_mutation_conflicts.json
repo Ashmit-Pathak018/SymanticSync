@@ -1,0 +1,83 @@
+{
+  "a418aeb4-5900-47bf-913f-97fe1db2626f": {
+    "conflict_id": "a418aeb4-5900-47bf-913f-97fe1db2626f",
+    "table": "items",
+    "row_id": 1,
+    "column": "*",
+    "conflict_type": "UPDATE_DELETE",
+    "base_value": {
+      "id": 1,
+      "code": "C-01",
+      "name": "Item One",
+      "quantity": 100
+    },
+    "value_a": {
+      "id": 1,
+      "code": "C-01",
+      "name": "updated",
+      "quantity": 100
+    },
+    "value_b": null,
+    "replica_a_id": "persist_a",
+    "replica_b_id": "persist_b",
+    "replica_a_ts": 1791827881010412.0,
+    "replica_b_ts": 1791827881013293.0,
+    "status": "flagged",
+    "explanation": "Concurrent UPDATE vs DELETE: Replica persist_a modified row, Replica persist_b deleted row (last op on B: DELETE).",
+    "detected_at": "2026-10-12T17:58:01.022266+00:00"
+  },
+  "fd839485-b834-4f2d-99a8-4b09ff28e79a": {
+    "conflict_id": "fd839485-b834-4f2d-99a8-4b09ff28e79a",
+    "table": "items",
+    "row_id": 3,
+    "column": "*",
+    "conflict_type": "INSERT_INSERT",
+    "base_value": null,
+    "value_a": {
+      "id": 3,
+      "code": "PK-A",
+      "name": "A",
+      "quantity": 1
+    },
+    "value_b": {
+      "id": 3,
+      "code": "PK-B",
+      "name": "B",
+      "quantity": 2
+    },
+    "replica_a_id": "persist_a",
+    "replica_b_id": "persist_b",
+    "replica_a_ts": 1791827880998893.5,
+    "replica_b_ts": 1791827881001603.5,
+    "status": "flagged",
+    "explanation": "INSERT collision on PK 3 with divergent row payloads.",
+    "detected_at": "2026-10-12T17:58:01.022266+00:00"
+  },
+  "1fe57501-7bd3-4818-a895-d27fe072e0cf": {
+    "conflict_id": "1fe57501-7bd3-4818-a895-d27fe072e0cf",
+    "table": "items",
+    "row_id": "10 vs 20",
+    "column": "code",
+    "conflict_type": "UNIQUE_COLLISION",
+    "base_value": null,
+    "value_a": {
+      "id": 10,
+      "code": "UNIQUE-X",
+      "name": "A unique",
+      "quantity": 3
+    },
+    "value_b": {
+      "id": 20,
+      "code": "UNIQUE-X",
+      "name": "B unique",
+      "quantity": 4
+    },
+    "replica_a_id": "persist_a",
+    "replica_b_id": "persist_b",
+    "replica_a_ts": 1791827881.0688198,
+    "replica_b_ts": 1791827881.0688202,
+    "status": "flagged",
+    "explanation": "UNIQUE constraint collision on column 'code': both replicas inserted value 'UNIQUE-X' under different PKs (10 vs 20).",
+    "detected_at": "2026-10-12T17:58:01.022266+00:00"
+  }
+}

@@ -1,22 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  BarChart3,
   Play,
-  TrendingUp,
   Cpu,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Sparkles,
   Info,
-  Layers,
   FileText,
   Download,
   Eye,
   X,
-  Database,
-  Hash,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -50,8 +40,7 @@ export function Analytics() {
   // Domain Workload State
   const [selectedWorkload, setSelectedWorkload] = useState('inventory');
   const [runningDomain, setRunningDomain] = useState(false);
-  const [domainMetrics, setDomainMetrics] = useState(null);
-  const [cachedDomainMetrics, setCachedDomainMetrics] = useState({});
+  const [domainStatus, setDomainStatus] = useState(null);
   const [domainError, setDomainError] = useState(null);
 
   // Parametric Stress Benchmark State
@@ -77,10 +66,6 @@ export function Analytics() {
         const metricsRes = await api.getMetrics();
         if (metricsRes && typeof metricsRes === 'object') {
           const wlMap = metricsRes.workloads || metricsRes;
-          setCachedDomainMetrics(wlMap);
-          if (wlMap[selectedWorkload]) {
-            setDomainMetrics(wlMap[selectedWorkload]);
-          }
           if (wlMap.stress_latest) {
             setStressMetrics(wlMap.stress_latest);
           }
@@ -112,8 +97,7 @@ export function Analytics() {
     setDomainError(null);
     try {
       const res = await api.runBenchmark(wl);
-      setDomainMetrics(res);
-      setCachedDomainMetrics((prev) => ({ ...prev, [wl]: res }));
+      setDomainStatus(res?.evaluation_status === 'illustrative_unvalidated' ? res : null);
     } catch (err) {
       setDomainError(err.data?.detail || err.message);
     } finally {
@@ -143,11 +127,7 @@ export function Analytics() {
 
   const handleSelectWorkload = (wlId) => {
     setSelectedWorkload(wlId);
-    if (cachedDomainMetrics[wlId]) {
-      setDomainMetrics(cachedDomainMetrics[wlId]);
-    } else {
-      setDomainMetrics(null);
-    }
+    setDomainStatus(null);
   };
 
   const handlePreviewArtifact = async (artifact) => {
@@ -176,7 +156,7 @@ export function Analytics() {
         <div>
           <h1 className="text-xl font-bold text-text-primary">Research Benchmark Dashboard</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Empirical comparative analysis: Generic CRDT Baseline (LWW) vs SemanticSync middleware across domain workloads and parametric stress matrices.
+            Measured synthetic stress telemetry and access to saved artifacts. Domain-runner outputs are illustrative and excluded from empirical results.
           </p>
         </div>
 
@@ -191,7 +171,7 @@ export function Analytics() {
                 : 'text-text-secondary hover:text-text-primary'
             }`}
           >
-            Domain Workloads
+            Domain Runner (Unvalidated)
           </button>
           <button
             type="button"
@@ -226,8 +206,7 @@ export function Analytics() {
             Scientific Evaluation Boundary & Research Scope
           </h4>
           <p className="text-amber-800 leading-relaxed text-[11px]">
-            Synthetic resolver benchmarks evaluate mathematical and semantic resolver accuracy across generated divergence pairs. They demonstrate that CRDT byte convergence does not guarantee semantic correctness.
-            <strong> Note:</strong> Synthetic resolver benchmarks do not certify arbitrary distributed mesh convergence or multi-master asynchronous consensus across partition schedules. Metrics presented reflect real measured values; unprovided metrics are explicitly marked N/A.
+            The domain runner is a development-only resolver demonstration, not a validated comparison. Its former replica-B LWW proxy and hard-coded convergence values are unavailable and excluded from empirical results. The separate stress matrix measures sequential tracked writes followed by batch synchronization; it does not establish concurrent-writer performance or general convergence.
           </p>
         </div>
       </div>
@@ -241,8 +220,6 @@ export function Analytics() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {DOMAIN_WORKLOADS.map((wl) => {
               const isSelected = selectedWorkload === wl.id;
-              const hasMetrics = !!cachedDomainMetrics[wl.id];
-
               return (
                 <div
                   key={wl.id}
@@ -255,11 +232,6 @@ export function Analytics() {
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-bold text-sm text-text-primary">{wl.name}</span>
-                    {hasMetrics && (
-                      <Badge variant="success" size="sm">
-                        Measured
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-xs text-text-secondary leading-relaxed line-clamp-2">
                     {wl.description}
@@ -276,7 +248,7 @@ export function Analytics() {
               loading={runningDomain}
               onClick={() => handleRunDomainBenchmark(selectedWorkload)}
             >
-              Run Benchmark ({activeWorkloadInfo?.name})
+              Check Runner Status ({activeWorkloadInfo?.name})
             </Button>
           </div>
 
@@ -286,184 +258,23 @@ export function Analytics() {
             </Alert>
           )}
 
-          {/* Domain Results View */}
-          {domainMetrics ? (
-            <div className="space-y-6">
-              {/* SCR Comparison Banner */}
-              <div className="bg-white border border-border rounded-xl p-6 shadow-xs">
-                <div className="flex items-center justify-between pb-4 border-b border-border">
-                  <div>
-                    <span className="text-xs uppercase font-bold text-primary tracking-wider">
-                      Primary Empirical Metric
-                    </span>
-                    <h2 className="text-lg font-bold text-text-primary mt-0.5">
-                      Semantic Correctness Rate (SCR)
-                    </h2>
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      Percentage of resolved conflict attributes that match human ground-truth intent.
-                    </p>
-                  </div>
-                  <Badge variant="primary" size="md">
-                    Workload: {domainMetrics.workload}
-                  </Badge>
-                </div>
-
-                {/* Bars */}
-                <div className="py-6 space-y-6 max-w-3xl">
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                      <div className="flex items-center gap-1.5 text-success">
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>SemanticSync (Semantic Middleware)</span>
-                      </div>
-                      <span className="font-mono text-sm font-bold text-success">
-                        {domainMetrics.semantic_sync_scr?.toFixed(1) ?? 'N/A'}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-5 p-0.5 border border-border overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-success to-emerald-400 h-full rounded-full transition-all duration-700 flex items-center justify-end pr-2 text-[10px] text-white font-mono font-bold"
-                        style={{ width: `${Math.max(domainMetrics.semantic_sync_scr || 0, 5)}%` }}
-                      >
-                        {domainMetrics.semantic_sync_scr?.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                      <div className="flex items-center gap-1.5 text-warning">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Generic Baseline (Last-Write-Wins / LWW)</span>
-                      </div>
-                      <span className="font-mono text-sm font-bold text-warning">
-                        {domainMetrics.baseline_scr?.toFixed(1) ?? 'N/A'}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-5 p-0.5 border border-border overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-warning to-amber-400 h-full rounded-full transition-all duration-700 flex items-center justify-end pr-2 text-[10px] text-white font-mono font-bold"
-                        style={{ width: `${Math.max(domainMetrics.baseline_scr || 0, 5)}%` }}
-                      >
-                        {domainMetrics.baseline_scr?.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#FEF8EC] border border-[#C98A1B]/30 rounded-lg p-4 text-xs text-text-primary flex items-start gap-3">
-                  <Info className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-bold text-warning mb-1">
-                      Key Takeaway: Convergence Does Not Equal Semantic Correctness
-                    </h4>
-                    <p className="text-text-secondary leading-relaxed">
-                      Both Generic Baseline and SemanticSync achieved <strong className="text-text-primary">100.0% Convergence Rate</strong> across all replicas.
-                      However, generic LWW blindly discarded valid concurrent changes (SCR: {domainMetrics.baseline_scr?.toFixed(1)}%).
-                      SemanticSync elevated semantic correctness to <strong className="text-success font-semibold">{domainMetrics.semantic_sync_scr?.toFixed(1)}%</strong> while maintaining identical byte convergence guarantees.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="p-4">
-                  <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Conflicts Evaluated
-                  </span>
-                  <div className="text-2xl font-bold text-text-primary mt-1 font-mono">
-                    {domainMetrics.total_conflicts_evaluated ?? 'N/A'}
-                  </div>
-                  <p className="text-[11px] text-text-secondary mt-1">Ground-truth concurrent edit pairs</p>
-                </Card>
-
-                <Card className="p-4">
-                  <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Correct Semantic Outcomes
-                  </span>
-                  <div className="text-2xl font-bold text-success mt-1 font-mono">
-                    {domainMetrics.correct_semantic_outcomes ?? 'N/A'} / {domainMetrics.total_conflicts_evaluated ?? 'N/A'}
-                  </div>
-                  <p className="text-[11px] text-text-secondary mt-1">Zero data loss or clobbering</p>
-                </Card>
-
-                <Card className="p-4">
-                  <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Convergence Rate
-                  </span>
-                  <div className="text-2xl font-bold text-primary mt-1 font-mono">
-                    {domainMetrics.semantic_sync_convergence_rate !== undefined
-                      ? `${domainMetrics.semantic_sync_convergence_rate.toFixed(1)}%`
-                      : 'N/A'}
-                  </div>
-                  <p className="text-[11px] text-text-secondary mt-1">Full replica consistency</p>
-                </Card>
-
-                <Card className="p-4">
-                  <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                    Resolution Overhead
-                  </span>
-                  <div className="text-2xl font-bold text-text-primary mt-1 font-mono flex items-center gap-1">
-                    <span>
-                      {domainMetrics.resolution_overhead_ms !== undefined
-                        ? domainMetrics.resolution_overhead_ms.toFixed(4)
-                        : 'N/A'}
-                    </span>
-                    <span className="text-xs text-text-muted font-normal">ms</span>
-                  </div>
-                  <p className="text-[11px] text-text-secondary mt-1">Sub-millisecond policy execution</p>
-                </Card>
-              </div>
-
-              {/* Uncollected Metrics in Domain Mode */}
-              <div className="bg-gray-50/80 border border-border rounded-xl p-4 text-xs space-y-3">
-                <div className="flex items-center gap-2 font-semibold text-text-primary">
-                  <Clock className="w-4 h-4 text-text-muted" />
-                  <span>Domain Workload Evaluation Scope (Explicit N/A Measurements)</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-[11px]">
-                  <div className="p-3 bg-white border border-border rounded-lg">
-                    <div className="font-semibold text-text-muted text-[10px] uppercase">Valid Resolution Accuracy (VRA)</div>
-                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
-                    <div className="text-[10px] text-text-muted font-sans leading-tight">
-                      Domain workloads evaluate ground-truth semantic correctness (SCR) on deterministic edit pairs rather than synthetic bounded range checks.
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white border border-border rounded-lg">
-                    <div className="font-semibold text-text-muted text-[10px] uppercase">Mutation Latency (p50 / p95 / p99)</div>
-                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
-                    <div className="text-[10px] text-text-muted font-sans leading-tight">
-                      Per-operation mutation-capture latency percentiles are measured under high-throughput batch loads in the Parametric Stress Harness tab.
-                    </div>
-                  </div>
-                  <div className="p-3 bg-white border border-border rounded-lg">
-                    <div className="font-semibold text-text-muted text-[10px] uppercase">Conflict Density Distribution</div>
-                    <div className="text-base font-bold text-text-secondary my-1">N/A</div>
-                    <div className="text-[10px] text-text-muted font-sans leading-tight">
-                      Domain scenarios evaluate fixed 1:1 concurrent edit pairs rather than variable stochastic density distributions.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Card className="text-center py-16">
-              <BarChart3 className="w-12 h-12 text-text-muted mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-text-primary">No Benchmark Executed For This Workload</h3>
-              <p className="text-xs text-text-secondary max-w-md mx-auto mt-1 mb-5">
-                Click below to run the empirical test harness against ground-truth conflict pairs.
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-sm text-text-primary" role="status">
+            <h2 className="font-bold text-amber-900">Domain runner is illustrative and unvalidated</h2>
+            <p className="mt-2 leading-relaxed">
+              This development endpoint does not run replica synchronization or a validated comparative experiment.
+              Its former replica-B LWW proxy, resolver scores, timing values, and hard-coded convergence fields are
+              unavailable. Domain-runner outputs are excluded from empirical results.
+            </p>
+            <p className="mt-2 text-xs text-text-secondary">
+              Use the Parametric Stress Harness for its documented, limited telemetry. Its workload is sequential
+              tracked writes followed by batch synchronization; it is not a concurrent-writer experiment.
+            </p>
+            {domainStatus && (
+              <p className="mt-3 text-xs font-semibold" data-testid="domain-runner-status">
+                Status checked for {domainStatus.workload}: {domainStatus.evaluation_status}
               </p>
-              <Button
-                variant="primary"
-                icon={Play}
-                loading={runningDomain}
-                onClick={() => handleRunDomainBenchmark(selectedWorkload)}
-              >
-                Run {activeWorkloadInfo?.name} Benchmark
-              </Button>
-            </Card>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -563,7 +374,7 @@ export function Analytics() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="success" size="md">
-                      Convergence Rate: {stressMetrics.semantic_sync_convergence_rate?.toFixed(1) ?? '100.0'}%
+                      Benchmark-row value agreement: {stressMetrics.semantic_sync_row_value_agreement_rate?.toFixed(1) ?? 'N/A'}%
                     </Badge>
                   </div>
                 </div>
@@ -575,8 +386,8 @@ export function Analytics() {
                     <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
                       <span className="text-text-primary">Semantic Correctness Rate (SCR)</span>
                       <div className="space-x-3 text-xs font-mono">
-                        <span className="text-warning">LWW: {stressMetrics.baseline_scr?.toFixed(1) ?? 'N/A'}%</span>
-                        <span className="text-success font-bold">SemanticSync: {stressMetrics.semantic_sync_scr?.toFixed(1) ?? 'N/A'}%</span>
+                        <span className="text-warning">LWW: {typeof stressMetrics.baseline_scr === 'number' ? `${stressMetrics.baseline_scr.toFixed(1)}%` : 'N/A'}</span>
+                        <span className="text-success font-bold">SemanticSync: {typeof stressMetrics.semantic_sync_scr === 'number' ? `${stressMetrics.semantic_sync_scr.toFixed(1)}%` : 'N/A'}</span>
                       </div>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-4 p-0.5 border border-border overflow-hidden flex">
@@ -592,9 +403,9 @@ export function Analytics() {
                     <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
                       <span className="text-text-primary">Valid Resolution Accuracy (VRA)</span>
                       <div className="space-x-3 text-xs font-mono">
-                        <span className="text-warning">LWW: {stressMetrics.baseline_vra !== undefined ? `${stressMetrics.baseline_vra.toFixed(1)}%` : 'N/A'}</span>
+                        <span className="text-warning">LWW: {typeof stressMetrics.baseline_vra === 'number' ? `${stressMetrics.baseline_vra.toFixed(1)}%` : 'N/A'}</span>
                         <span className="text-success font-bold">
-                          SemanticSync: {stressMetrics.semantic_sync_vra !== undefined ? `${stressMetrics.semantic_sync_vra.toFixed(1)}%` : 'N/A'}
+                          SemanticSync: {typeof stressMetrics.semantic_sync_vra === 'number' ? `${stressMetrics.semantic_sync_vra.toFixed(1)}%` : 'N/A'}
                         </span>
                       </div>
                     </div>

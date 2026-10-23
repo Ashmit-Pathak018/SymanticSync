@@ -42,7 +42,7 @@ export function Sidebar() {
       badgeVariant: syncStatus?.flagged_conflicts > 0 ? 'bg-danger text-white' : 'bg-warning text-white',
     },
     { to: '/quarantine', label: 'FK Quarantine', icon: ShieldAlert },
-    { to: '/sync', label: 'CRDT Sync Hub', icon: RefreshCw },
+    { to: '/sync', label: 'Replica Sync Hub', icon: RefreshCw },
     { to: '/benchmark', label: 'Research Benchmark', icon: BarChart3 },
     { to: '/settings', label: 'Policy Registry', icon: BookOpen },
   ];

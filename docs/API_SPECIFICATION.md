@@ -346,6 +346,30 @@ Request: `{"db_id":"<registered database id>"}`. Compaction returns `status: ret
 ### `POST /api/v1/sync/generate-conflict`
 Inject controlled divergence for testing.
 
+### `POST /api/v1/sync/increment`
+Apply one additive operation to a registered replica.
+
+**Request Body:**
+```json
+{
+  "db_id": "db_inventory",
+  "replica_id": "inventory_device_a",
+  "table": "products",
+  "row_id": 1,
+  "column": "quantity",
+  "delta": 5
+}
+```
+
+The endpoint returns `status`, a stable `operation_id`, the target replica ID,
+and the persisted value. This is an operation-based increment and is distinct
+from the existing absolute-value write used by `generate-conflict` and
+`apply_change`. Increment deltas are deduplicated by operation identity and
+can be applied in either order when the receiver has no concurrent non-increment
+operation on that cell. A concurrent absolute edit is rejected for policy-level
+conflict handling; the increment endpoint does not imply general N-way
+convergence or bounded-counter allocation.
+
 ---
 
 ## Query Endpoint
@@ -372,12 +396,27 @@ Execute SQL against base or replica.
 }
 ```
 
+Every SQL-console connection enables SQLite foreign-key enforcement before the statement runs. Base-database writes require `allow_write: true`; replica writes are allowed. These direct SQL writes are not captured in `_ss_change_log`, do not invoke orphan quarantine, and bypass the shared process mutation lock. FK constraints and schema-declared `ON DELETE` / `ON UPDATE` actions still apply. Use tracked mutation and sync APIs when operation replay or quarantine preservation is required.
+
+---
+
+## Quarantine Endpoints
+
+### `GET /api/v1/quarantine`
+Lists quarantined dependent-row payloads, optionally filtered by `db_id`, `table`, or `status`.
+
+### `GET /api/v1/quarantine/{quarantine_id}`
+Returns one quarantine record.
+
+### `POST /api/v1/quarantine/{quarantine_id}/resolve`
+Accepts `{"action":"confirmed_deleted"}` or `{"action":"relinked","new_parent_row_id":<parent-pk>}`. Relinking restores the quarantined row transactionally and validates its FK. Current relinking supports one single-column FK to a parent with a single-column primary key; unsupported FK shapes are rejected and remain quarantined.
+
 ---
 
 ## Benchmark Endpoints
 
 ### `POST /api/v1/benchmark/run`
-Run empirical benchmark comparison.
+Return the status of the development-only domain runner. This endpoint no longer runs a comparative experiment or returns numeric results.
 
 **Request Body:**
 ```json
@@ -390,15 +429,28 @@ Supported workloads: `"inventory"`, `"notes"`, `"health"`
 ```json
 {
   "workload": "inventory",
-  "baseline_scr": 33.3,
-  "semantic_sync_scr": 100.0,
-  "baseline_convergence_rate": 100.0,
-  "semantic_sync_convergence_rate": 100.0,
-  "resolution_overhead_ms": 0.05,
-  "total_conflicts_evaluated": 3,
-  "correct_semantic_outcomes": 3
+  "evaluation_status": "illustrative_unvalidated",
+  "explanation": "This development runner does not execute replica synchronization or a validated comparative experiment. Its former replica-B LWW proxy and hard-coded convergence values are unavailable. Domain-runner outputs are excluded from empirical results; use the separately documented stress benchmark for its limited, measured telemetry.",
+  "baseline_scr": null,
+  "semantic_sync_scr": null,
+  "baseline_convergence_rate": null,
+  "semantic_sync_convergence_rate": null,
+  "resolution_overhead_ms": null,
+  "total_conflicts_evaluated": null,
+  "correct_semantic_outcomes": null
 }
 ```
+
+The endpoint response is explicitly `illustrative_unvalidated`; all former numeric fields are null and must not be interpreted as measurements. Historical cached values without this status are not displayed by the frontend. The domain-runner outputs are excluded from empirical results because the former implementation used a replica-B LWW proxy and direct resolver calls rather than replica synchronization. This does not affect the separate stress endpoint or its saved artifacts.
+
+---
+
+### `POST /api/v1/benchmark/stress`
+Runs seeded real-replica stress trials (`num_operations`: 1000, 5000, or 10000; `conflict_density`: 0, 0.05, 0.20, or 0.50; `seed`; `trials`: 2–10, default 2; optional artifact export). Each paired trial runs both systems on the same generated trace and equivalent fresh data; execution order alternates. Writes are sequential followed by batch sync, not concurrent-writer trials.
+
+Repeated-trial responses include per-metric sample count, median, minimum, maximum, and units in `summary_statistics`. The legacy `resolution_overhead_ms` field is the median paired SemanticSync batch-sync time minus LWW batch-sync time; it is not resolver-only time. API output does not include raw per-operation observations; request artifact export for JSON/CSV outputs.
+
+Stress `baseline_scr` and `semantic_sync_scr` are null when there are no conflict rows. Otherwise SCR scores both replicas' final values for conflict rows only. The `*_row_value_agreement_rate` fields compare only ordered `bench_rows.value` observations, not full database state. Stress VRA is null because this workload defines no domain range or relational-integrity constraints. The legacy `resolution_overhead_ms` field is SemanticSync batch-sync time minus LWW batch-sync time; it is not resolver-only time.
 
 ---
 

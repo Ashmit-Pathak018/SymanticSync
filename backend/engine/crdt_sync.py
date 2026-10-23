@@ -245,16 +245,28 @@ def _next_change_sequence(conn: sqlite3.Connection) -> int:
     return int(row[0])
 
 
-def _row_dependency_ids(conn: sqlite3.Connection, table: str, row_id: Any, schema: str = "main") -> list[str]:
-    """Return the latest known operation identity for a row in one log stream."""
+def _row_dependency_ids(
+    conn: sqlite3.Connection, table: str, row_id: Any, schema: str = "main",
+    *, commutative_increment: bool = False,
+) -> list[str]:
+    """Return the causal row frontier, retaining unordered increment siblings."""
     ensure_compaction_tables(conn, schema)
-    row = conn.execute(
-        f"SELECT origin_id FROM (SELECT origin_id,sequence,table_name,row_id FROM {schema}._ss_change_log "
-        f"UNION ALL SELECT origin_id,sequence,table_name,row_id FROM {schema}._ss_compacted_receipts) "
-        "WHERE table_name=? AND row_id=? ORDER BY sequence DESC LIMIT 1",
+    rows = conn.execute(
+        f"SELECT origin_id,op_type FROM (SELECT origin_id,op_type,sequence,table_name,row_id FROM {schema}._ss_change_log "
+        f"UNION ALL SELECT origin_id,op_type,sequence,table_name,row_id FROM {schema}._ss_compacted_receipts) "
+        "WHERE table_name=? AND row_id=? ORDER BY sequence DESC",
         (table, str(row_id)),
-    ).fetchone()
-    return [str(row[0])] if row and row[0] else []
+    ).fetchall()
+    dependencies: list[str] = []
+    for origin_id, op_type in rows:
+        if not origin_id:
+            continue
+        if commutative_increment and op_type == "INCREMENT":
+            continue
+        dependencies.append(str(origin_id))
+        if op_type != "INCREMENT":
+            break
+    return dependencies
 
 
 class _OperationSavepointConnection:
@@ -513,6 +525,91 @@ class CRDTSyncEngine:
             conn.commit()
 
         return change_id
+
+    @serialized_mutation
+    def apply_increment(
+        self,
+        replica_db_path: str,
+        replica_id: str,
+        table: str,
+        row_id: Any,
+        column: str,
+        delta: int | float,
+        custom_hlc: HLC | tuple[float, int] | None = None,
+    ) -> str:
+        """Apply a tracked additive operation, distinct from absolute SET."""
+        import json
+        import math
+        from numbers import Real
+
+        if not isinstance(delta, Real) or isinstance(delta, bool):
+            raise ValueError("INCREMENT delta must be a finite integer or float.")
+        if isinstance(delta, float) and not math.isfinite(delta):
+            raise ValueError("INCREMENT delta must be finite.")
+        hlc = self._clocks.setdefault(replica_id, HLC(node_id=replica_id))
+        if custom_hlc is None:
+            hlc.tick()
+        elif isinstance(custom_hlc, HLC):
+            hlc.tick(recv_pt=custom_hlc.pt, recv_l=custom_hlc.l)
+        else:
+            hlc.tick(recv_pt=custom_hlc[0], recv_l=custom_hlc[1])
+        operation_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        quote = lambda value: '"' + value.replace('"', '""') + '"'
+
+        with connect_with_foreign_keys(replica_db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                _ensure_change_log_table(conn)
+                pk_col = self._get_pk_column(conn, table)
+                if pk_col is None:
+                    raise RuntimeError(f"Cannot increment: table '{table}' requires a single-column primary key.")
+                row = conn.execute(
+                    f"SELECT {quote(column)} FROM {quote(table)} WHERE {quote(pk_col)}=?", (row_id,)
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError(f"INCREMENT target row {row_id!r} is missing from '{table}'.")
+                old_value = row[0]
+                if not isinstance(old_value, Real) or isinstance(old_value, bool):
+                    raise ValueError("INCREMENT target must contain an integer or float.")
+                candidate = old_value + delta
+                if isinstance(candidate, float) and not math.isfinite(candidate):
+                    raise ValueError("INCREMENT result must be finite.")
+                # SQLite INTEGER is signed 64-bit. Reject overflow before SQLite
+                # can coerce an exact integer result into an imprecise REAL.
+                if isinstance(candidate, int) and not -(2**63) <= candidate <= 2**63 - 1:
+                    raise OverflowError("INCREMENT result exceeds SQLite's signed 64-bit INTEGER range.")
+                dependencies = _row_dependency_ids(
+                    conn, table, row_id, commutative_increment=True,
+                )
+                changed = conn.execute(
+                    f"UPDATE {quote(table)} SET {quote(column)}=? WHERE {quote(pk_col)}=?",
+                    (candidate, row_id),
+                )
+                if changed.rowcount != 1:
+                    raise RuntimeError("INCREMENT must update exactly one row.")
+                persisted = conn.execute(
+                    f"SELECT {quote(column)} FROM {quote(table)} WHERE {quote(pk_col)}=?", (row_id,)
+                ).fetchone()
+                if (persisted is None or persisted[0] != candidate
+                        or (isinstance(candidate, int) and type(persisted[0]) is not int)):
+                    raise RuntimeError("Stored INCREMENT result differs from the exact computed value.")
+                verify_fk_integrity(conn)
+                sequence = _next_change_sequence(conn)
+                conn.execute(
+                    """INSERT INTO _ss_change_log
+                    (id,table_name,row_id,column_name,old_value,new_value,ts_pt,ts_l,replica_id,
+                     applied_at,op_type,origin_id,sequence,source_id,source_sequence,depends_on)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,'INCREMENT',?,?,?,?,?)""",
+                    (operation_id, table, str(row_id), column, str(old_value), str(delta),
+                     hlc.pt, hlc.l, replica_id, now_iso, operation_id, sequence,
+                     replica_id, sequence, json.dumps(dependencies)),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        return operation_id
 
     @serialized_mutation
     def apply_insert(
@@ -1169,7 +1266,7 @@ class CRDTSyncEngine:
                     "UNION ALL SELECT source_sequence FROM _ss_compacted_receipts WHERE table_name=? AND row_id=? AND source_id=?)",
                     (table, str(row_id), source_id, table, str(row_id), source_id),
                 ).fetchone()[0]
-                if (bounded_delta is None and latest_source_op is not None
+                if (op_type not in {"INCREMENT"} and bounded_delta is None and latest_source_op is not None
                         and int(latest_source_op) >= source_sequence):
                     conn.rollback()
                     return "obsolete", None
@@ -1191,9 +1288,9 @@ class CRDTSyncEngine:
                         conn.rollback()
                         return "rejected", f"missing causal dependencies: {', '.join(missing)}"
                 local_events = conn.execute(
-                    "SELECT origin_id,column_name,bounded_delta,bounds_min,bounds_max "
+                    "SELECT origin_id,column_name,bounded_delta,bounds_min,bounds_max,op_type "
                     "FROM _ss_change_log WHERE table_name=? AND row_id=? UNION ALL "
-                    "SELECT origin_id,column_name,bounded_delta,bounds_min,bounds_max "
+                    "SELECT origin_id,column_name,bounded_delta,bounds_min,bounds_max,op_type "
                     "FROM _ss_compacted_receipts WHERE table_name=? AND row_id=?",
                     (table, str(row_id), table, str(row_id)),
                 ).fetchall()
@@ -1208,7 +1305,12 @@ class CRDTSyncEngine:
                                 and event[3] == bounds_min and event[4] == bounds_max
                                 for event in unknown_local)
                     )
-                    if not bounded_compatible:
+                    increment_compatible = (
+                        op_type == "INCREMENT" and bounded_delta is None
+                        and all(event[1] == column and event[2] is None and event[5] == "INCREMENT"
+                                for event in unknown_local)
+                    )
+                    if not (bounded_compatible or increment_compatible):
                         conn.rollback()
                         return "rejected", "receiver has an operation unknown to the source"
                 info = conn.execute(f'PRAGMA table_info({quote(table)})').fetchall()
@@ -1237,6 +1339,45 @@ class CRDTSyncEngine:
                     if current != payload:
                         conn.rollback()
                         return "rejected", "stored INSERT row does not match payload"
+                elif op_type == "INCREMENT":
+                    if bounded_delta is not None or bounds_min is not None or bounds_max is not None:
+                        conn.rollback()
+                        return "rejected", "INCREMENT cannot carry BOUNDED_SUM metadata"
+                    if current is None or column not in current:
+                        conn.rollback()
+                        return "rejected", "INCREMENT target row or column is missing"
+                    current_value = current[column]
+                    if not isinstance(current_value, (int, float)) or isinstance(current_value, bool):
+                        conn.rollback()
+                        return "rejected", "INCREMENT target value is not numeric"
+                    try:
+                        delta = int(new_value) if isinstance(current_value, int) and new_value is not None and str(new_value).lstrip("+-").isdigit() else float(new_value)
+                    except (TypeError, ValueError, OverflowError):
+                        conn.rollback()
+                        return "rejected", "INCREMENT delta payload is invalid"
+                    if isinstance(delta, float) and not math.isfinite(delta):
+                        conn.rollback()
+                        return "rejected", "INCREMENT delta must be finite"
+                    candidate = current_value + delta
+                    if isinstance(candidate, int) and not -(2**63) <= candidate <= 2**63 - 1:
+                        conn.rollback()
+                        return "rejected", "INCREMENT result exceeds SQLite's signed 64-bit INTEGER range"
+                    if isinstance(candidate, float) and not math.isfinite(candidate):
+                        conn.rollback()
+                        return "rejected", "INCREMENT result must be finite"
+                    changed = conn.execute(
+                        f'UPDATE {quote(table)} SET {quote(column)}=? WHERE {quote(pk)}=?',
+                        (candidate, row_id),
+                    )
+                    if changed.rowcount != 1:
+                        conn.rollback()
+                        return "rejected", "INCREMENT did not affect exactly one row"
+                    row = conn.execute(f'SELECT * FROM {quote(table)} WHERE {quote(pk)}=?', (row_id,)).fetchone()
+                    current = dict(zip(cols, row)) if row is not None else None
+                    if (current is None or current[column] != candidate
+                            or (isinstance(candidate, int) and type(current[column]) is not int)):
+                        conn.rollback()
+                        return "rejected", "stored INCREMENT value differs from the exact computed result"
                 elif op_type == "UPDATE":
                     if current is None or column not in current:
                         conn.rollback()
@@ -1316,6 +1457,7 @@ class CRDTSyncEngine:
                             conn.rollback()
                             return "rejected", f"FK integrity violation after DELETE: {fk_err}"
                 elif op_type == "RESOLVE":
+                    bounded = None
                     expected_rows = json.loads(old_value) if old_value else {}
                     payload = json.loads(new_value) if new_value else None
                     if not isinstance(expected_rows, dict) or not isinstance(payload, dict):
@@ -1411,6 +1553,11 @@ class CRDTSyncEngine:
                             conn.rollback()
                             return "rejected", "RESOLVE delete prior row does not match receiver"
                         if current is not None:
+                            # RESOLVE delete is still a destructive parent
+                            # mutation. Preserve dependent payloads before the
+                            # delete, just as for a received DELETE tombstone.
+                            ensure_quarantine_table(conn)
+                            quarantine_orphans(conn, table, row_id)
                             cursor = conn.execute(f'DELETE FROM {quote(table)} WHERE {quote(pk)}=?', (row_id,))
                             if cursor.rowcount != 1 or conn.execute(f'SELECT 1 FROM {quote(table)} WHERE {quote(pk)}=?', (row_id,)).fetchone():
                                 conn.rollback()

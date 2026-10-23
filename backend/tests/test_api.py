@@ -27,8 +27,11 @@ def test_health_and_root(client):
 
 def test_seed_and_list_databases(client):
     r_seed = client.post("/api/v1/seed", json={"workload": "all"})
-    assert r_seed.status_code == 200
-    assert r_seed.json()["status"] == "seeded"
+    # The application seeds an empty demo data directory at startup. Re-running
+    # the seeder would replace sample values while leaving operation history, so
+    # the route must refuse a second seed and explain the safe reset mechanism.
+    assert r_seed.status_code == 409
+    assert "fresh SEMANTICSYNC_DATA_DIR" in r_seed.json()["detail"]
 
     r_dbs = client.get("/api/v1/databases")
     assert r_dbs.status_code == 200
@@ -88,8 +91,22 @@ def test_benchmark_endpoint(client):
     assert r_bm.status_code == 200
     metrics = r_bm.json()
     assert metrics["workload"] == "inventory"
-    assert metrics["semantic_sync_scr"] >= 90.0
-    assert metrics["total_conflicts_evaluated"] >= 3
+    assert metrics["evaluation_status"] == "illustrative_unvalidated"
+    assert "does not execute replica synchronization" in metrics["explanation"]
+    for name in (
+        "baseline_scr",
+        "semantic_sync_scr",
+        "baseline_convergence_rate",
+        "semantic_sync_convergence_rate",
+        "resolution_overhead_ms",
+        "total_conflicts_evaluated",
+        "correct_semantic_outcomes",
+    ):
+        assert metrics[name] is None
+
+    cached = client.get("/api/v1/metrics").json()["workloads"]["inventory"]
+    assert cached["evaluation_status"] == "illustrative_unvalidated"
+    assert cached["baseline_convergence_rate"] is None
 
 
 def test_benchmark_artifacts_empty_directory(client, tmp_path, monkeypatch):

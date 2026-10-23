@@ -188,7 +188,7 @@ See `docs/SQL_CONSOLE.md` for full specification.
 │                                                            │
 │  Conflicts Evaluated: 3                                    │
 │  Correct Outcomes:    3 / 3                               │
-│  Resolution Overhead: 0.05ms / conflict                   │
+│  Conflict-evaluation loop: ~0.05ms / conflict              │
 └──────────────────────────────────────────────────────────┘
 ```
 

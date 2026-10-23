@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import sqlite3
 from pathlib import Path
 
@@ -69,6 +70,22 @@ def test_resolver_flags_out_of_bound_combined_deltas_without_clamping(a, b, expe
     assert result.status == status
     assert result.resolved_value == expected
     assert "pending" in result.explanation if status == "flagged" else "within bounds" in result.explanation
+
+
+def test_generated_bounded_sum_is_commutative_for_fixed_bounds():
+    rng = random.Random(0xB0_0D_ED)
+    minimum, maximum = -100, 100
+    for _ in range(250):
+        base, a, b = (rng.randint(minimum, maximum) for _ in range(3))
+        forward = SemanticResolver.resolve(
+            "BOUNDED_SUM", base, a, b, min_bound=minimum, max_bound=maximum
+        )
+        reverse = SemanticResolver.resolve(
+            "BOUNDED_SUM", base, b, a, min_bound=minimum, max_bound=maximum
+        )
+        assert (forward.status, forward.resolved_value) == (
+            reverse.status, reverse.resolved_value
+        )
 
 
 def test_bounded_resolver_rejects_missing_or_non_numeric_bounds():

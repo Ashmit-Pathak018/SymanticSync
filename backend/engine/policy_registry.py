@@ -8,7 +8,7 @@ Policies
   SUM     — additive delta merge for numeric columns
   AVG     — arithmetic mean for numeric columns
   APPEND  — text concatenation for TEXT columns
-  LWW     — Last-Write-Wins using HLC timestamp + replica ID
+  LWW     — Last-Write-Wins using supplied timestamp + replica ID
   REJECT  — flag for manual review; no auto-resolution
   MIN     — lower bound for numeric columns
   MAX     — upper bound for numeric columns
@@ -113,21 +113,28 @@ register_policy(
 
 register_policy(
     name="AVG",
-    description="Arithmetic mean of all replica values: (A + B) / 2.0. Suitable for sensor readings, ratings, dosages.",
+    description="Pairwise arithmetic mean (A + B) / 2.0; no sample count or weight is retained.",
     compatible_types={"INTEGER", "REAL", "NUMERIC"},
     symmetric=True,
 )
 
 register_policy(
     name="APPEND",
-    description="Concatenates divergent text values with '; ' separator. Preserves both contributions.",
+    description=(
+        "Pairwise text merge: accepts the changed side when the other matches the base, "
+        "returns identical current strings once, otherwise joins full strings with '; ' "
+        "in replica-ID order. Does not retain per-contribution identities."
+    ),
     compatible_types={"TEXT"},
     symmetric=True,
 )
 
 register_policy(
     name="LWW",
-    description="Last-Write-Wins: selects value with highest logical timestamp. Tie-break via replica ID.",
+    description=(
+        "When both timestamps are supplied, selects the greater timestamp and then replica ID on ties; if either is missing, selects by replica ID. "
+        "This deterministic order is not proof of causality or semantic preservation."
+    ),
     compatible_types={"*"},
     symmetric=False,
 )

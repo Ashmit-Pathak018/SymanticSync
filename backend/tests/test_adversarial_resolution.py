@@ -82,11 +82,18 @@ def test_generated_valid_associativity_and_idempotence_boundaries():
         if a != base:
             assert _resolve("SUM", base, a, a).resolved_value != a
 
-        min_left = min(min(a, b), c)
-        max_left = max(max(a, b), c)
-        assert min_left == min(a, min(b, c))
-        assert max_left == max(a, max(b, c))
-        assert min(a, a) == a and max(a, a) == a
+        min_ab = _resolve("MIN", base, a, b).resolved_value
+        min_bc = _resolve("MIN", base, b, c).resolved_value
+        max_ab = _resolve("MAX", base, a, b).resolved_value
+        max_bc = _resolve("MAX", base, b, c).resolved_value
+        assert _resolve("MIN", base, min_ab, c).resolved_value == _resolve(
+            "MIN", base, a, min_bc
+        ).resolved_value
+        assert _resolve("MAX", base, max_ab, c).resolved_value == _resolve(
+            "MAX", base, a, max_bc
+        ).resolved_value
+        assert _resolve("MIN", base, a, a).resolved_value == a
+        assert _resolve("MAX", base, a, a).resolved_value == a
 
 
 def test_avg_non_associativity_is_explicit():

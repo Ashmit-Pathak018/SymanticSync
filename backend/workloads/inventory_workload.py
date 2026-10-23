@@ -113,9 +113,9 @@ def seed(base_path: str, replica_paths: dict[str, str]) -> dict[str, Any]:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             _BASE_ROWS,
         )
-        if replica_id == "device_a":
+        if replica_id == "device_a" or replica_id.endswith("_device_a"):
             con_r.execute("UPDATE products SET quantity = 115, description = 'Original desc; Restocked by device_a' WHERE id = 1")
-        elif replica_id == "device_b":
+        elif replica_id == "device_b" or replica_id.endswith("_device_b"):
             con_r.execute("UPDATE products SET quantity = 120, description = 'Original desc; Restocked by device_b' WHERE id = 1")
         con_r.commit()
         con_r.close()

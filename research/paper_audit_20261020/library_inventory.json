@@ -1,0 +1,463 @@
+[
+  {
+    "index": 1,
+    "filename": "1-s2.0-S0167739X22004186-main.pdf",
+    "error": "'dict' object has no attribute 'title'"
+  },
+  {
+    "index": 2,
+    "filename": "3447865.3457970.pdf",
+    "pages": 3,
+    "meta_title": "Access Control Conflict Resolution in Distributed File Systems using CRDTs",
+    "meta_author": "Elena Yanakieva, Michael Youssef, Ahmad Hussein Rezae, and Annette Bieniusa",
+    "doi": "10.1145/3447865.3457970",
+    "first_lines": [
+      "Access Control Conflict Resolution in Distributed File Systems",
+      "using CRDTs",
+      "Elena Yanakieva",
+      "TU Kaiserslautern",
+      "Kaiserslautern, Germany",
+      "e_yanakiev15@cs.uni-kl.de",
+      "Michael Youssef",
+      "TU Kaiserslautern"
+    ],
+    "abstract_snippet": "Distributed file systems have become an essential service for shar- ing data among users. An important aspect of a file system is its ability to keep its contents secure from unauthorized access. To in- vestigate the interplay of security and consistency in distributed file systems, we formalize the three properties related to data security, namely confidentiality, integrity and accessibility. Bas"
+  },
+  {
+    "index": 3,
+    "filename": "3563351.pdf",
+    "pages": 29,
+    "meta_title": "Modular Verification of Op-Based CRDTs in Separation Logic",
+    "meta_author": "Abel Nieto, L\u00e9on Gondelman, Alban Reynaud, Amin Timany, and Lars Birkedal",
+    "doi": "10.1145/3563351",
+    "first_lines": [
+      "188",
+      "Modular Verification of Op-Based CRDTs",
+      "in Separation Logic",
+      "ABEL NIETO, Aarhus University, Denmark",
+      "L\u00c9ON GONDELMAN, Aarhus University, Denmark",
+      "ALBAN REYNAUD, ENS Lyon, France",
+      "AMIN TIMANY, Aarhus University, Denmark",
+      "LARS BIRKEDAL, Aarhus University, Denmark"
+    ],
+    "abstract_snippet": ""
+  },
+  {
+    "index": 4,
+    "filename": "3642976.3653029.pdf",
+    "pages": 7,
+    "meta_title": "Undo and Redo Support for Replicated Registers",
+    "meta_author": "Leo Stewen; Martin Kleppmann",
+    "doi": "10.1145/3642976.3653029",
+    "first_lines": [
+      "Undo and Redo Support for Replicated Registers",
+      "Leo Stewen",
+      "lstwn@mailbox.org",
+      "Technical University of Munich",
+      "Germany",
+      "Martin Kleppmann",
+      "martin@kleppmann.com",
+      "University of Cambridge"
+    ],
+    "abstract_snippet": "Undo and redo functionality is ubiquitous in collaboration software. In single user settings, undo and redo are well understood. However, when multiple users edit a document, concurrency may arise, leading to a non-linear operation history. This renders undo and redo more complex both in terms of their semantics and implementation. We survey the undo and redo semantics of current main- stream coll"
+  },
+  {
+    "index": 5,
+    "filename": "3642976.3653030.pdf",
+    "pages": 7,
+    "meta_title": "Extending JSON CRDTs with Move Operations",
+    "meta_author": "Liangrun Da; Martin Kleppmann",
+    "doi": "10.1145/3642976.3653030",
+    "first_lines": [
+      "Extending JSON CRDTs with Move Operations",
+      "Liangrun Da",
+      "liangrun.da@tum.de",
+      "Technical University of Munich",
+      "Munich, Germany",
+      "Martin Kleppmann",
+      "martin@kleppmann.com",
+      "University of Cambridge"
+    ],
+    "abstract_snippet": "Conflict-Free Replicated Data Types (CRDTs) for JSON allow users to concurrently update a JSON document and auto- matically merge the updates into a consistent state. Moving a subtree in a map or reordering elements in a list within a JSON CRDT is challenging: naive merge algorithms may introduce unexpected results such as duplicates or cycles. In this paper, we introduce an algorithm for move ope"
+  },
+  {
+    "index": 6,
+    "filename": "3642976.3653031.pdf",
+    "pages": 8,
+    "meta_title": "Wrapping Rings in Lattices: An Algebraic Symbiosis of Incremental View Maintenance and Eventual Consistency",
+    "meta_author": "",
+    "doi": "10.1145/3642976.3653031",
+    "first_lines": [
+      "Wrapping Rings in Lattices: An Algebraic Symbiosis of",
+      "Incremental View Maintenance and Eventual",
+      "Consistency",
+      "Conor Power",
+      "UC Berkeley",
+      "conorpower@cs.berkeley.edu",
+      "Saikrishna Achalla",
+      "UC Berkeley"
+    ],
+    "abstract_snippet": "We reconcile the use of semi-lattices in CRDTs and the use of groups and rings in incremental view maintenance to con- struct systems with strong eventual consistency, incr emental computation, and database query optimization. Keywords: distributed systems, eventual consistency, incre- mental view maintenance, quer y optimization, algebraic sys- tems ACM Reference Format: Conor Power, Saikrishna A"
+  },
+  {
+    "index": 7,
+    "filename": "3642976.3653036.pdf",
+    "pages": 9,
+    "meta_title": "Models for Storage in Database Backends",
+    "meta_author": "Edgard Schiebelbein; Saalik Hatia; Annette Bieniusa; Gustavo Petri; Carla Ferreira; Marc Shapiro",
+    "doi": "10.1145/3642976.3653036",
+    "first_lines": [
+      "Models for Storage in Database Backends",
+      "A Rigorous Approach for Formally-Correct Designs",
+      "Edgard Schiebelbein",
+      "University of Kaiserslautern-Landau",
+      "Kaiserslautern, Germany",
+      "e_schiebel19@cs.uni-kl.de",
+      "Saalik Hatia",
+      "Sorbonne-Universit\u00e9 (LIP6)"
+    ],
+    "abstract_snippet": "This paper describes ongoing work on developing a formal specification of a database backend. We present the formal- isation of the expected behaviour of a basic transactional system that calls into a simple store API, and instantiate in two semantic models. The first is a map-based, classical ver- sioned key-value store; the second, journal-based, appends individual transaction effects to a journ"
+  },
+  {
+    "index": 8,
+    "filename": "3650212.3685555.pdf",
+    "pages": 3,
+    "meta_title": "Decentralized Near-Synchronous Local-First Programming Collaboration",
+    "meta_author": "Leon Freudenthaler",
+    "doi": "10.1145/3650212.3685555",
+    "first_lines": [
+      "Decentralized Near-Synchronous Local-First Programming",
+      "Collaboration",
+      "Leon Freudenthaler",
+      "leon.freudenthaler@fh-campuswien.ac.at",
+      "FH Campus Wien/TU Wien",
+      "Vienna, Austria",
+      "Abstract",
+      "This dissertation investigates near-synchronous collaboration in"
+    ],
+    "abstract_snippet": "This dissertation investigates near-synchronous collaboration in programming environments by means of Conflict-free Replicated Data Types (CRDTs). While screen sharing and video conferencing offer basic features for collaborative programming, IDE-embedded collaboration tools provide precise tracking of source code changes and developer control. CRDTs enable decentralized collaboration, eliminating"
+  },
+  {
+    "index": 9,
+    "filename": "978-3-030-44914-8.pdf",
+    "pages": 785,
+    "meta_title": "",
+    "meta_author": "",
+    "doi": "",
+    "first_lines": [
+      "29th European Symposium on Programming, ESOP 2020",
+      "Held as Part of the European Joint Conferences",
+      "on Theory and Practice of Software, ETAPS 2020",
+      "Dublin, Ireland, April 25\u201330, 2020, Proceedings",
+      "Programming",
+      "Languages",
+      "and Systems",
+      "LNCS 12075 ARCoSS"
+    ],
+    "abstract_snippet": ""
+  },
+  {
+    "index": 10,
+    "filename": "978-3-030-85082-1.pdf",
+    "pages": 11,
+    "meta_title": "",
+    "meta_author": "",
+    "doi": "10.1007/978-3-030-85082-1_22",
+    "first_lines": [
+      "Augmenting SQLite for Local-First",
+      "Software",
+      "Iver Toft Tomter and Weihai Yu(B)",
+      "UIT - The Arctic University of Norway, Troms\u00f8, Norway",
+      "weihai.yu@uit.no",
+      "Abstract. Local-\ufb01rst software aims at both the ability to work o\ufb04ine on",
+      "local data and the ability to collaborate across multiple devices. CRDTs",
+      "(con\ufb02ict-free replicated data types) are abstractions for o\ufb04ine and col-"
+    ],
+    "abstract_snippet": "Local-\ufb01rst software aims at both the ability to work o\ufb04ine on local data and the ability to collaborate across multiple devices. CRDTs (con\ufb02ict-free replicated data types) are abstractions for o\ufb04ine and col- laborative work that guarantees strong eventual consistency. RDB (rela- tional database) is a mature and successful computer industry for man- agement of data, and SQLite is an ideal RDB candi"
+  },
+  {
+    "index": 11,
+    "filename": "Antidote SQL SQL for Weakly Consistent Databases.pdf",
+    "pages": 139,
+    "meta_title": "Antidote SQL: SQL for Weakly Consistent Databases",
+    "meta_author": "Pedro Miguel Sousa Lopes",
+    "doi": "",
+    "first_lines": [
+      "Pedro Miguel Sousa Lopes",
+      "B.Sc. in Computer Science and Informatics",
+      "Antidote SQL: SQL for Weakly Consistent",
+      "Databases",
+      "Dissertation submitted in partial ful\ufb01llment",
+      "of the requirements for the degree of",
+      "Master of Science in",
+      "Computer Science and Informatics Engineering"
+    ],
+    "abstract_snippet": ""
+  },
+  {
+    "index": 12,
+    "filename": "Conflict-free Replicated Data Views (2025).pdf",
+    "pages": 27,
+    "meta_title": "CRDV: Conflict-free Replicated Data Views",
+    "meta_author": "Nuno Faria",
+    "doi": "10.1145/3709675",
+    "first_lines": [
+      "CRDV: Conflict-free Replicated Data Views",
+      "NUNO FARIA, INESCTEC and University of Minho, Portugal",
+      "JOS\u00c9 PEREIRA, INESCTEC and University of Minho, Portugal",
+      "There are now multiple proposals for Conflict-free Replicated Data Types (CRDTs) in SQL databases aimed",
+      "at distributed systems. Some, such as ElectricSQL, provide only relational tables as convergent replicated",
+      "maps, but this omits semantics that would be useful for merging updates. Others, such as Pg_crdt, provide",
+      "access to a rich library of encapsulated column types. However, this puts merge and query processing outside",
+      "the scope of the query optimizer and restricts the ability of an administrator to influence access paths with"
+    ],
+    "abstract_snippet": ""
+  },
+  {
+    "index": 13,
+    "filename": "Consistent_Local-First_Software_Enforcing_Safety_and_Invariants_for_Local-First_Applications.pdf",
+    "pages": 13,
+    "meta_title": "Consistent Local-First Software: Enforcing Safety and Invariants for Local-First Applications",
+    "meta_author": "",
+    "doi": "10.1109/TSE.2024.3477723",
+    "first_lines": [
+      "IEEE TRANSACTIONS ON SOFTW ARE ENGINEERING, VOL. 51, NO. 1, JANUARY 2025 53",
+      "Consistent Local-First Software: Enforcing Safety",
+      "and Invariants for Local-First Applications",
+      "Mirko K\u00f6hler , George Zakhour , Pascal Weisenburger , and Guido Salvaneschi",
+      "Abstract\u2014Local-\ufb01rst software embraces data replication as a",
+      "means to achieve scalability and of\ufb02ine availability. A crucial",
+      "ingredient of local-\ufb01rst software are mergeable data types,",
+      "like con\ufb02ict-free replicated data types (CRDTs), which feature"
+    ],
+    "abstract_snippet": "Local-\ufb01rst software embraces data replication as a means to achieve scalability and of\ufb02ine availability. A crucial ingredient of local-\ufb01rst software are mergeable data types, like con\ufb02ict-free replicated data types (CRDTs), which feature eventual consistency by enabling processes to access data locally and later merge it with other replicas in an asynchronous manner. Notably, the merging process n"
+  },
+  {
+    "index": 14,
+    "filename": "Crust_A_Modular_Framework_for_Conflict-Free_Replicated_Data_Types_CRDTs_Development_Validation_and_Benchmarking.pdf",
+    "pages": 13,
+    "meta_title": "Crust: A Modular Framework for Conflict-Free Replicated Data Types (CRDTs) Development, Validation, and Benchmarking",
+    "meta_author": "",
+    "doi": "",
+    "first_lines": [
+      "Received 15 March 2025, accepted 5 May 2025, date of publication 12 May 2025, date of current version 19 May 2025.",
+      "Digital Object Identifier 10.1 109/ACCESS.2025.3568925",
+      "Crust: A Modular Framework for Conflict-Free",
+      "Replicated Data Types (CRDTs) Development,",
+      "Validation, and Benchmarking",
+      "YUNRUI ZHU AND JING MA",
+      ", (Member, IEEE)",
+      "School of Engineering, Computer and Mathematical Sciences, Auckland University of Technology, Auckland 1010, New Zealand"
+    ],
+    "abstract_snippet": "Conflict-free Replicated Data Types (CRDTs) are vital for achieving strong eventual consistency in distributed systems, but their development and evaluation face significant challenges by inadequate tooling. While CRDT research focus on algorithms and applications, critical gaps persist in validation and performance benchmarking. To address this, a novel Rust-based framework \u2018\u2018Crust\u2019\u2019 designed to "
+  },
+  {
+    "index": 15,
+    "filename": "Ensuring Convergence and Invariants Without Coordination.pdf",
+    "pages": 29,
+    "meta_title": "Ensuring Convergence and Invariants Without Coordination",
+    "meta_author": "",
+    "doi": "10.4230/LIPIcs.ECOOP.2025.4",
+    "first_lines": [
+      "Ensuring Convergence and Invariants Without",
+      "Coordination",
+      "Dina Borrego \u2709",
+      "NOVA School of Science and Technology, Caparica, Portugal",
+      "Vrije Universiteit Brussel, Belgium",
+      "Nuno Pregui\u00e7a \u2709",
+      "NOVA School of Science and Technology, Caparica, Portugal",
+      "Elisa Gonzalez Boix \u2709"
+    ],
+    "abstract_snippet": "The CAP theorem demonstrates a trade-off between consistency and availability (and, by extension, latency) in systems where network partitions are unavoidable, such as in cloud computing and local-first software. While adopting weak consistency can preserve availability, it may result in inconsistencies that compromise application correctness. Replicated data types provide a principled, coordinati"
+  },
+  {
+    "index": 16,
+    "filename": "Eventually-Consistent Replicated Relations and Updatable Views (2023).pdf",
+    "pages": 10,
+    "meta_title": "",
+    "meta_author": "",
+    "doi": "10.1007/978-3-031-42941-5_17",
+    "first_lines": [
+      "Eventually-Consistent Replicated Relations",
+      "and Updatable Views",
+      "Joachim Thomassen and Weihai Yu(B)",
+      "UIT - The Arctic University of Norway, Troms\u00f8, Norway",
+      "weihai.yu@uit.no",
+      "Abstract. Distributed systems have to live with weak consistency, such as even-",
+      "tual consistency, if high availability is the primary goal and network partitioning",
+      "is unexceptional. Local-\ufb01rst applications are examples of such systems. There is"
+    ],
+    "abstract_snippet": "Distributed systems have to live with weak consistency, such as even- tual consistency, if high availability is the primary goal and network partitioning is unexceptional. Local-\ufb01rst applications are examples of such systems. There is currently work on local-\ufb01rst databases where the data are asynchronously repli- cated on multiple devices and the replicas can be locally updated even when the devic"
+  },
+  {
+    "index": 17,
+    "filename": "LIPIcs.ECOOP.2023.14.pdf",
+    "pages": 33,
+    "meta_title": "Algebraic Replicated Data Types: Programming Secure Local-First Software",
+    "meta_author": "",
+    "doi": "10.4230/LIPIcs.ECOOP.2023.14",
+    "first_lines": [
+      "Algebraic Replicated Data Types:",
+      "Programming Secure Local-First Software",
+      "Christian Kuessner",
+      "Technische Universit\u00e4t Darmstadt, Germany",
+      "Ragnar Mogk",
+      "Technische Universit\u00e4t Darmstadt, Germany",
+      "Anna-Katharina Wickert",
+      "Technische Universit\u00e4t Darmstadt, Germany"
+    ],
+    "abstract_snippet": "This paper is about programming support for local-first applications that manage private data locally, but still synchronize data between multiple devices. Typical use cases are synchronizing settings and data, and collaboration between multiple users. Such applications must preserve the privacy and integrity of the user\u2019s data without impeding or interrupting the user\u2019s normal workflow \u2013 even whe"
+  },
+  {
+    "index": 18,
+    "filename": "LIPIcs.ECOOP.2023.2.pdf",
+    "pages": 26,
+    "meta_title": "Nested Pure Operation-Based CRDTs",
+    "meta_author": "",
+    "doi": "10.4230/LIPIcs.ECOOP.2023.2",
+    "first_lines": [
+      "Nested Pure Operation-Based CRDTs",
+      "Jim Bauwens \u2709",
+      "Software Languages Lab, Vrije Universiteit Brussel, Belgium",
+      "Elisa Gonzalez Boix \u2709",
+      "Software Languages Lab, Vrije Universiteit Brussel, Belgium",
+      "Abstract",
+      "Modern distributed applications increasingly replicate data to guarantee high availability and optimal",
+      "user experience. Conflict-free Replicated Data Types (CRDTs) are a family of data types specially"
+    ],
+    "abstract_snippet": "Modern distributed applications increasingly replicate data to guarantee high availability and optimal user experience. Conflict-free Replicated Data Types (CRDTs) are a family of data types specially designed for highly available systems that guarantee some form of eventual consistency. Designing CRDTs is very difficult because it requires devising designs that guarantee convergence in the presen"
+  },
+  {
+    "index": 19,
+    "filename": "LIPIcs.ECOOP.2023.22.pdf",
+    "pages": 27,
+    "meta_title": "Modular Verification of State-Based CRDTs in Separation Logic",
+    "meta_author": "",
+    "doi": "10.4230/LIPIcs.ECOOP.2023.22",
+    "first_lines": [
+      "Modular Verification of State-Based CRDTs in",
+      "Separation Logic",
+      "Abel Nieto",
+      "Aarhus University, Denmark",
+      "Arnaud Daby-Seesaram",
+      "ENS Paris-Saclay, France",
+      "L\u00e9on Gondelman",
+      "Aarhus University, Denmark"
+    ],
+    "abstract_snippet": "Conflict-free Replicated Datatypes (CRDTs) are a class of distributed data structures that are highly-available and weakly consistent. The CRDT taxonomy is further divided into two subclasses: state-based and operation-based (op-based). Recent prior work showed how to use separation logic to verify convergence and functional correctness of op-based CRDTs while (a) verifying implementations (as opp"
+  },
+  {
+    "index": 20,
+    "filename": "LIPIcs.ECOOP.2023.9.pdf",
+    "pages": 45,
+    "meta_title": "VeriFx: Correct Replicated Data Types for the Masses",
+    "meta_author": "",
+    "doi": "10.4230/LIPIcs.ECOOP.2023.9",
+    "first_lines": [
+      "VeriFx: Correct Replicated Data Types for the",
+      "Masses",
+      "Kevin De Porre \u2709 /h\u2322me",
+      "Vrije Universiteit Brussel, Belgium",
+      "Carla Ferreira \u2709 /h\u2322me",
+      "NOVA School of Science and Technology, Caparica, Portugal",
+      "Elisa Gonzalez Boix \u2709 /h\u2322me",
+      "Vrije Universiteit Brussel, Belgium"
+    ],
+    "abstract_snippet": "Distributed systems adopt weak consistency to ensure high availability and low latency, but state convergence is hard to guarantee due to conflicts. Experts carefully design replicated data types (RDTs) that resemble sequential data types and embed conflict resolution mechanisms that ensure convergence. Designing RDTs is challenging as their correctness depends on subtleties such as the ordering o"
+  },
+  {
+    "index": 21,
+    "filename": "LoRe.pdf",
+    "pages": 26,
+    "meta_title": "TOPLAS-00007-2023",
+    "meta_author": "",
+    "doi": "10.1145/3633769",
+    "first_lines": [
+      "2",
+      "LoRe: A Programming Model for Verifiably Safe Local-first",
+      "Software",
+      "JULIAN HAAS and RAGNAR MOGK , Technische Universit\u00e4t Darmstadt, Germany",
+      "ELENA YANAKIEVA and ANNETTE BIENIUSA , Rheinland-Pf\u00e4lzische Technische Universit\u00e4t",
+      "Kaiserslautern-Landau, Germany",
+      "MIRA MEZINI , Technische Universit\u00e4t Darmstadt, Germany, and National Research Center for Applied",
+      "Cybersecurity (ATHENE), Germany, and Hessian Center for Artificial Intelligence (hessian.AI), Germany"
+    ],
+    "abstract_snippet": ""
+  },
+  {
+    "index": 22,
+    "filename": "Merge What You Can, Fork What You Can't (2022).pdf",
+    "pages": 9,
+    "meta_title": "Merge What You Can, Fork What You Can't: Managing Data Integrity in Local-First Software",
+    "meta_author": "Nicholas Schiefer; Geoffrey Litt; Daniel Jackson",
+    "doi": "10.1145/3517209",
+    "first_lines": [
+      "Merge What You Can, Fork What You Can\u2019t:",
+      "Managing Data Integrity in Local-First Software",
+      "Nicholas Schiefer",
+      "MIT CSAIL",
+      "Cambridge, MA, USA",
+      "schiefer@mit.edu",
+      "Geoffrey Litt",
+      "MIT CSAIL"
+    ],
+    "abstract_snippet": "In a local-first architecture that prioritizes availability in the presence of network partitions, there is a tension between two goals: merging concurrent changes without user inter- vention and maintaining data integrity constraints. We pro- pose a synchronization model called forking histories which satisfies both goals in an unconventional way. In the case of conflicting writes, the model expo"
+  },
+  {
+    "index": 23,
+    "filename": "Remove-Win_a_Design_Framework_for_Conflict-free_Replicated_Data_Types.pdf",
+    "pages": 8,
+    "meta_title": "Remove-Win: a Design Framework for Conflict-free Replicated Data Types",
+    "meta_author": "",
+    "doi": "10.1109/ICPADS53394.2021.00081",
+    "first_lines": [
+      "Remove-Win: a Design Framework for",
+      "Con\ufb02ict-free Replicated Data Types",
+      "Y uqi Zhang, Hengfeng Wei\u2217, Y u Huang\u2217",
+      "National Key Laboratory for Novel Software Technology, Nanjing University",
+      "Nanjing, Jiangsu Province, 210023, China",
+      "cs.yqzhang@gmail.com, {hfwei, yuhuang}@nju.edu.cn",
+      "Abstract\u2014Distributed storage systems employ replication to",
+      "improve performance and reliability. To provide low latency data"
+    ],
+    "abstract_snippet": "Distributed storage systems employ replication to improve performance and reliability. To provide low latency data access, replicas are often required to accept updates without coordination with each other, and the updates are then propa- gated asynchronously. This brings the critical challenge of con\ufb02ict resolution among concurrent updates. Con\ufb02ict-free Replicated Data Type (CRDT) is a principled"
+  },
+  {
+    "index": 24,
+    "filename": "Riffle (2023).pdf",
+    "pages": 16,
+    "meta_title": "Riffle: Reactive Relational State for Local-First Applications",
+    "meta_author": "Geoffrey Litt",
+    "doi": "10.1145/3586183.3606801",
+    "first_lines": [
+      "Rifle: Reactive Relational State for Local-First Applications",
+      "Geofrey Litt Nicholas Schiefer",
+      "Massachusetts Institute of Technology Anthropic",
+      "Cambridge, MA, USA San Francisco, CA, USA",
+      "glitt@mit.edu schiefer@mit.edu",
+      "Johannes Schickling Daniel Jackson",
+      "N/A Massachusetts Institute of Technology",
+      "Berlin, Germany Cambridge, MA, USA"
+    ],
+    "abstract_snippet": "The reactive paradigm for developing user interfaces promises both simplicity and scalability, but existing frameworks usually compromise one for the other. We present Rife, a reactive state management system that achieves both simplicity and scalability by managing the entire state of a web application in a client-side persis- tent relational database. Data transformations over the application st"
+  },
+  {
+    "index": 25,
+    "filename": "Synql.pdf",
+    "pages": 18,
+    "meta_title": "",
+    "meta_author": "",
+    "doi": "10.1007/978-3-031-62638-8_2",
+    "first_lines": [
+      "Synql: A CRDT-Based Approach",
+      "for Replicated Relational Databases",
+      "with Integrity Constraints",
+      "Claudia-Lavinia Ignat(B), Victorien Elvinger, and Habibatou Ba",
+      "Inria, Universit\u00e9 de Lorraine, CNRS, LORIA, 54500 Nancy, France",
+      "claudia.ignat@inria.fr",
+      "Abstract. Many o\ufb04ine-\ufb01rst applications use an embedded relational",
+      "database, such as SQLite, to manage their data. The replication of the"
+    ],
+    "abstract_snippet": "Many o\ufb04ine-\ufb01rst applications use an embedded relational database, such as SQLite, to manage their data. The replication of the database eases the addition of collaborative features to its applications. Most of the approaches for replicating a relational database require coor- dination at some extent. A few approaches propose a coordination-less replication to allow o\ufb04ine work. These approaches are"
+  }
+]

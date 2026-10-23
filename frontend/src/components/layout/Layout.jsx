@@ -22,8 +22,7 @@ export function Layout() {
         {backendHealthy === false && (
           <div className="p-4 bg-danger-light border-b border-danger/30">
             <Alert variant="danger" title="Cannot connect to SemanticSync API Server">
-              The backend API server at <code className="bg-white/80 px-1 py-0.5 rounded font-mono">http://127.0.0.1:8000</code> is unreachable.
-              Please start it using <code className="bg-white/80 px-1 py-0.5 rounded font-mono">python main.py</code> in your project directory.
+              {error || <>Start the backend with <code className="bg-white/80 px-1 py-0.5 rounded font-mono">python main.py --no-reload</code> and check the API URL configuration.</>}
             </Alert>
           </div>
         )}

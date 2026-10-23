@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Zap,
   Filter,
   CheckCircle2,
   AlertTriangle,
-  Clock,
   RotateCcw,
-  Sparkles,
   ChevronDown,
   ChevronRight,
   ShieldCheck,
-  Check,
-  ArrowRight,
   Info,
-  Layers,
-  Copy,
-  ExternalLink,
   ShieldAlert,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -30,6 +22,7 @@ export function Conflicts() {
 
   const [conflicts, setConflicts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dbFilter, setDbFilter] = useState(selectedDbId || 'all');
@@ -54,6 +47,7 @@ export function Conflicts() {
     const reqId = ++requestIdRef.current;
     setLoading(true);
     setResolveError(null);
+    setLoadError(null);
     try {
       const data = await api.getConflicts({
         status: statusFilter,
@@ -64,6 +58,8 @@ export function Conflicts() {
       setConflicts(list);
     } catch (err) {
       if (reqId === requestIdRef.current) {
+        setConflicts([]);
+        setLoadError(err.data?.detail || err.message || 'Conflict list request failed.');
         console.error('Failed to load conflicts:', err);
       }
     } finally {
@@ -147,16 +143,16 @@ export function Conflicts() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono text-primary bg-primary-light px-2 py-0.5 rounded-sm font-semibold">
-              Deterministic Convergence
+              Tracked Change Review
             </span>
             <span className="text-xs text-text-muted">/</span>
-            <span className="text-xs font-semibold text-text-secondary">Full Mutation Model</span>
+            <span className="text-xs font-semibold text-text-secondary">Supported Mutation Types</span>
           </div>
           <h1 className="text-xl font-bold text-text-primary mt-1">
             Conflict Inspector & Semantic Resolver
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Evaluates concurrent update divergences, primary-key insert collisions, tombstones, and bounded invariant limits.
+            Review conflicts and held operations reported for the selected replicas, including supported row-mutation cases and bounded candidates.
           </p>
         </div>
 
@@ -247,12 +243,16 @@ export function Conflicts() {
       {/* Conflicts List */}
       {loading ? (
         <div className="text-center py-16 text-text-muted text-xs">Loading conflicts...</div>
+      ) : loadError ? (
+        <Alert variant="danger" title="Conflict list unavailable">
+          {loadError} Check the backend and refresh before treating this list as empty.
+        </Alert>
       ) : filteredConflicts.length === 0 ? (
         <Card className="text-center py-12">
           <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-3 opacity-90" />
           <h3 className="text-sm font-semibold text-text-primary">No Conflicts Matching Filter</h3>
           <p className="text-xs text-text-secondary max-w-md mx-auto mt-1 mb-4">
-            All replicas are currently converged, or no conflicts match the active status/type criteria.
+            No conflicts match the active status and type filters. This view alone does not establish full-database convergence.
             You can inject controlled divergences from the Sync Hub.
           </p>
           <Button size="sm" variant="secondary" onClick={() => (window.location.href = '/sync')}>
@@ -267,8 +267,6 @@ export function Conflicts() {
             const isInsertCollision =
               c.conflict_type === 'INSERT_INSERT' || c.conflict_type === 'UNIQUE_COLLISION';
             const isTombstone = c.conflict_type === 'UPDATE_DELETE';
-            const isBounded = String(c.policy || '').startsWith('BOUNDED_SUM');
-
             const feedback =
               resolveFeedback && resolveFeedback.id === c.conflict_id ? resolveFeedback : null;
             const errFeedback =

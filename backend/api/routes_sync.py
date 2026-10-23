@@ -16,7 +16,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictFloat, StrictInt
 
 from backend.api.models import SyncRequest
 from backend.api.state import DATA_DIR, app_state
@@ -50,6 +50,15 @@ class ConflictGenerateRequest(BaseModel):
     column: str
     value_a: Any
     value_b: Any
+
+
+class IncrementRequest(BaseModel):
+    db_id: str
+    replica_id: str
+    table: str
+    row_id: Any
+    column: str
+    delta: StrictInt | StrictFloat
 
 
 @router.get("/sync/status", status_code=200)
@@ -508,6 +517,15 @@ def _resume_checkpoint(checkpoint: dict[str, Any]) -> dict[str, Any]:
     epoch = hashlib.sha256(json.dumps(membership, separators=(",", ":")).encode("utf-8")).hexdigest()
     if manifest.get("membership_epoch") != epoch:
         raise CheckpointStoreBlocked("checkpoint membership epoch does not match its member list")
+    manifest_member_ids = {item["replica_id"] for item in manifest.get("replicas", [])}
+    current_member_ids = {
+        item["replica_id"]
+        for item in app_state.list_replicas_for_db(manifest.get("db_id", ""))
+    }
+    if current_member_ids != manifest_member_ids:
+        raise CheckpointStoreBlocked(
+            "registry membership changed since checkpoint; recovery cannot authorize pruning"
+        )
     # Validate all immutable recovery material before ACK reconciliation or pruning.
     _validate_manifest_frontier(manifest)
     _validate_manifest_snapshots(manifest, epoch)
@@ -625,7 +643,7 @@ def _validate_post_checkpoint_tail(db_path: str, snapshot: dict[str, Any], repli
             if not isinstance(dependencies, list) or any(not isinstance(dep, str) or dep not in seen_operations for dep in dependencies):
                 raise CheckpointStoreBlocked(f"post-checkpoint causal dependency is not present: {replica_id}")
             table_q = str(table).replace('"', '""')
-            if op_type not in {"UPDATE", "INSERT", "DELETE"}:
+            if op_type not in {"UPDATE", "INCREMENT", "INSERT", "DELETE"}:
                 raise CheckpointStoreBlocked(
                     f"post-checkpoint {op_type} cannot be safely replay-validated: {replica_id}"
                 )
@@ -640,7 +658,40 @@ def _validate_post_checkpoint_tail(db_path: str, snapshot: dict[str, Any], repli
                 values = cursor.fetchone()
                 return dict(zip([desc[0] for desc in cursor.description], values)) if values is not None else None
 
-            if op_type == "UPDATE":
+            if op_type == "INCREMENT":
+                import math
+                current_row = read_row()
+                if current_row is None or column not in current_row:
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT target is missing: {replica_id}")
+                current_value = current_row[column]
+                if not isinstance(current_value, (int, float)) or isinstance(current_value, bool):
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT target is not numeric: {replica_id}")
+                serialized_current = str(current_value)
+                if serialized_current != old_value:
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT precondition mismatch: {replica_id}")
+                if row[14] is not None or row[15] is not None or row[16] is not None:
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT has incompatible bounded metadata: {replica_id}")
+                try:
+                    delta = int(new_value) if isinstance(current_value, int) and new_value is not None and str(new_value).lstrip("+-").isdigit() else float(new_value)
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT delta is invalid: {replica_id}") from exc
+                if isinstance(delta, float) and not math.isfinite(delta):
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT delta is non-finite: {replica_id}")
+                candidate = current_value + delta
+                if isinstance(candidate, int) and not -(2**63) <= candidate <= 2**63 - 1:
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT overflows SQLite INTEGER: {replica_id}")
+                if isinstance(candidate, float) and not math.isfinite(candidate):
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT result is non-finite: {replica_id}")
+                col_q = str(column).replace('"', '""')
+                changed = expected.execute(
+                    f'UPDATE "{table_q}" SET "{col_q}"=? WHERE "{pk_q}"=?',
+                    (candidate, row_id),
+                )
+                stored = read_row()
+                if (stored is None or stored.get(column) != candidate
+                        or (isinstance(candidate, int) and type(stored.get(column)) is not int)):
+                    raise CheckpointStoreBlocked(f"post-checkpoint INCREMENT stored value differs from replay: {replica_id}")
+            elif op_type == "UPDATE":
                 col_q = str(column).replace('"', '""')
                 current = expected.execute(
                     f'SELECT "{col_q}" FROM "{table_q}" WHERE "{pk_q}"=?', (row_id,)
@@ -906,3 +957,30 @@ def generate_conflict(body: ConflictGenerateRequest) -> dict[str, Any]:
         "replica_a_change_id": change_a,
         "replica_b_change_id": change_b,
     }
+
+
+@router.post("/sync/increment", status_code=200)
+@serialized_mutation
+def apply_increment(body: IncrementRequest) -> dict[str, Any]:
+    """Record an explicit additive operation on one registered replica."""
+    replica = app_state.get_replica(body.replica_id)
+    if not replica or replica.get("parent_db_id") != body.db_id:
+        raise HTTPException(status_code=404, detail="Replica is not registered for this database.")
+    path = app_state.get_replica_path(body.replica_id)
+    if not path:
+        raise HTTPException(status_code=404, detail=f"Replica '{body.replica_id}' not found.")
+    try:
+        operation_id = _sync_engine.apply_increment(
+            path, body.replica_id, body.table, body.row_id, body.column, body.delta,
+        )
+    except (ValueError, OverflowError, RuntimeError, sqlite3.Error) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    with connect_with_foreign_keys(path) as conn:
+        value = conn.execute(
+            f'SELECT "{body.column.replace(chr(34), chr(34) * 2)}" '
+            f'FROM "{body.table.replace(chr(34), chr(34) * 2)}" '
+            f'WHERE "{_sync_engine._get_pk_column(conn, body.table)}"=?',
+            (body.row_id,),
+        ).fetchone()
+    return {"status": "applied", "operation_id": operation_id,
+            "replica_id": body.replica_id, "value": value[0] if value else None}

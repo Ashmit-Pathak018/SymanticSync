@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     app_state.load()
 
     # Pre-seed default demo workspaces if state is empty
-    if not app_state.databases:
+    if not app_state.databases and not app_state.registry_load_error:
         try:
             from backend.api.routes_seed import seed_workload
             from backend.api.models import SeedRequest

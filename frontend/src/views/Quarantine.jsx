@@ -1,19 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ShieldAlert,
   ShieldCheck,
   RotateCcw,
   Trash2,
   Link2,
   CheckCircle2,
-  AlertTriangle,
-  Info,
   Filter,
   Search,
-  ExternalLink,
   ChevronDown,
   ChevronRight,
-  Database,
   Layers,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -136,7 +131,7 @@ export function Quarantine() {
             Quarantine Management
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Atomically isolated orphaned child records whose parent rows were removed or divergent during synchronization.
+            Review child rows quarantined by supported tracked parent-delete paths. Coverage is limited to supported schemas and enumerated operations.
           </p>
         </div>
 
@@ -156,9 +151,8 @@ export function Quarantine() {
 
       {/* Scientific Invariant Info Banner */}
       <Alert variant="info" title="Relational Integrity & Foreign Key Isolation Boundary">
-        SemanticSync enforces <code className="font-mono font-bold">PRAGMA foreign_keys = ON</code> before all write transactions.
-        When a parent entity is deleted across replicas, orphaned child payloads are atomically moved to quarantine in the same transaction
-        before parent mutation commits. Quarantined records can be safely relinked under an existing parent or confirmed deleted for audit retention.
+        Enumerated tracked mutation and recovery paths enable <code className="font-mono font-bold">PRAGMA foreign_keys = ON</code> before their write transactions.
+        Supported tracked parent deletes quarantine dependent child payloads atomically. SQL Console writes and external-process writes are outside the complete tracking and quarantine guarantees; unsupported schema shapes may be rejected or skipped.
       </Alert>
 
       {/* Filter Toolbar */}
@@ -240,7 +234,7 @@ export function Quarantine() {
           <ShieldCheck className="w-12 h-12 text-success mx-auto mb-3 opacity-90" />
           <h3 className="text-sm font-semibold text-text-primary">No Quarantined Records Found</h3>
           <p className="text-xs text-text-secondary max-w-md mx-auto mt-1 mb-4">
-            Foreign key invariants are fully satisfied across all synchronized tables. Zero orphaned records are held in quarantine.
+            No quarantine records match the current filters. This is not a full integrity audit of every table or external write path.
           </p>
           <Button size="sm" variant="secondary" onClick={() => (window.location.href = '/conflicts')}>
             View Active Conflicts

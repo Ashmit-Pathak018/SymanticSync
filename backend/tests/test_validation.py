@@ -19,6 +19,9 @@ def test_valid_combinations():
     assert PolicyValidator.validate("REJECT", "INTEGER").valid is True
     assert PolicyValidator.validate("MIN", "INTEGER").valid is True
     assert PolicyValidator.validate("MAX", "REAL").valid is True
+    for policy in ("MIN", "MAX"):
+        for numeric_type in ("INTEGER", "REAL", "NUMERIC"):
+            assert PolicyValidator.validate(policy, numeric_type).valid is True
 
 
 def test_invalid_type_combinations():
@@ -33,6 +36,11 @@ def test_invalid_type_combinations():
     res3 = PolicyValidator.validate("APPEND", "INTEGER")
     assert res3.valid is False
     assert res3.error_code == "TYPE_INCOMPATIBLE"
+
+    for policy in ("MIN", "MAX"):
+        result = PolicyValidator.validate(policy, "TEXT")
+        assert result.valid is False
+        assert result.error_code == "TYPE_INCOMPATIBLE"
 
 
 def test_unknown_policy():

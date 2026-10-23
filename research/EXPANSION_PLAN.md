@@ -15,16 +15,16 @@ We conducted a literature search on arXiv across CRDTs, relational replication, 
 2. **Balegas, Preguiça, et al. (2018) — *IPA: Invariant-preserving Applications for Weakly-consistent Replicated Databases*** ([arXiv:1802.08474](https://arxiv.org/abs/1802.08474))
    - *Key takeaway:* Weak consistency breaks relational invariants. Rather than blocking, the system should allow developers to declare repair semantics or consistency guards.
    - *Application to SemanticSync:* Directly supports our thesis. We can extend SemanticSync from single-cell policies to **Relational Invariant Policies** (e.g., non-negative bounds `quantity >= 0`, foreign key orphan isolation).
-3. **Balegas et al. (2015) — *Enforcing Numeric Invariants with Bounded Counters*** ([arXiv:1503.09052](https://arxiv.org/abs/1503.09052))
+3. **Balegas et al. (2015) — *Extending Eventually Consistent Cloud Databases for Enforcing Numeric Invariants*** ([arXiv:1503.09052](https://arxiv.org/abs/1503.09052))
    - *Key takeaway:* Additive counters (`SUM`) in inventory fail when concurrent deductions exceed total stock (underflow). Escrow/bounded counters prevent negative quantities without full 2PC.
    - *Application to SemanticSync:* Introduce a `BOUNDED_SUM` policy enforcing `min_bound=0`.
 4. **Lewchenko, Radhakrishna, et al. (2018) — *Conflict-Aware Replicated Data Types (CARDs)*** ([arXiv:1802.08733](https://arxiv.org/abs/1802.08733))
    - *Key takeaway:* Operations can be guarded by two-state predicates that allow local execution while inferring conflicts algorithmically.
    - *Application to SemanticSync:* Policy validators can check preconditions (e.g. valid status transitions: `DRAFT -> PUBLISHED` vs `ARCHIVED`).
-5. **Ravishankar, Kulkarni, Vaidya (2025/2026) — *Asynchronous Checkpoint for Eventually Consistent Databases*** ([arXiv:2510.06404](https://arxiv.org/abs/2510.06404))
-   - *Key takeaway:* Infinite change log growth degrades performance. Checkpointing must summarize past mutations into minimal snapshots.
-   - *Application to SemanticSync:* Delta change log pruning / compaction in `_ss_change_log`.
-6. **Marr et al. (2023) — *Live & Local Schema Change: Challenge Problems*** ([arXiv:2309.11406](https://arxiv.org/abs/2309.11406))
+5. **Ravishankar, Kulkarni, and Vaidya (2025) — *MuFASA: Asynchronous Checkpoint for Weakly Consistent Fully Replicated Databases*** ([arXiv:2510.06404](https://arxiv.org/abs/2510.06404))
+   - *Key takeaway:* Proposes size-minimal asynchronous checkpointing for fully replicated weakly consistent databases.
+   - *Relevance to SemanticSync:* Related checkpointing research; its model and guarantees are distinct from SemanticSync's SQLite change-log compaction and do not establish SemanticSync's correctness.
+6. **Edwards, Petricek, and van der Storm (2023) — *Live & Local Schema Change: Challenge Problems*** ([arXiv:2309.11406](https://arxiv.org/abs/2309.11406))
    - *Key takeaway:* Local-first software must handle schema evolution across replicas that upgrade at different times.
 
 ---

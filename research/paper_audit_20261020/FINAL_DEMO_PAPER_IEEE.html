@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SemanticSync: Schema-Level Semantic Merge Policies for Local-First Relational Databases</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.body, {
+            delimiters: [
+                {left: "$$", right: "$$", display: true},
+                {left: "$", right: "$", display: false}
+            ],
+            throwOnError: false
+        });
+    });
+    </script>
+    <style>
+@page {
+    size: A4 portrait;
+    margin: 18mm 14mm 20mm 14mm;
+    @bottom-center {
+        content: counter(page);
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 10pt;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 10pt;
+    line-height: 1.22;
+    color: #000;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+}
+
+/* Header spanning both columns */
+.ieee-header {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 12pt;
+}
+
+.paper-title {
+    font-size: 22pt;
+    font-weight: bold;
+    line-height: 1.15;
+    margin: 0 0 10pt 0;
+}
+
+.author-block {
+    display: flex;
+    justify-content: center;
+    gap: 40pt;
+    margin-bottom: 12pt;
+    font-size: 9.5pt;
+    line-height: 1.2;
+}
+
+.author-col {
+    text-align: center;
+    max-width: 220pt;
+}
+
+.author-name {
+    font-size: 10.5pt;
+    font-weight: bold;
+    margin-bottom: 2pt;
+}
+
+.author-dept, .author-inst, .author-city, .author-email {
+    font-size: 9.5pt;
+    color: #222;
+}
+
+.abstract-keywords-block {
+    width: 100%;
+    margin-bottom: 12pt;
+    padding: 0 14pt;
+    text-align: justify;
+    text-justify: inter-word;
+}
+
+.abstract-text {
+    font-size: 9pt;
+    line-height: 1.2;
+    font-weight: bold;
+    margin-bottom: 5pt;
+}
+
+.abstract-heading {
+    font-style: italic;
+    font-weight: bold;
+}
+
+.keywords-text {
+    font-size: 9pt;
+    line-height: 1.2;
+}
+
+.keywords-heading {
+    font-style: italic;
+    font-weight: bold;
+}
+
+/* Two-column layout for body */
+.two-column-layout {
+    column-count: 2;
+    column-gap: 16pt;
+    text-align: justify;
+    text-justify: inter-word;
+}
+
+/* Headings */
+h2.ieee-h1 {
+    font-size: 10pt;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    margin: 10pt 0 3pt 0;
+    break-after: avoid;
+    break-inside: avoid;
+}
+
+h3.ieee-h2 {
+    font-size: 10pt;
+    font-style: italic;
+    font-weight: bold;
+    margin: 7pt 0 2pt 0;
+    text-align: left;
+    break-after: avoid;
+    break-inside: avoid;
+}
+
+p {
+    font-size: 9.5pt;
+    line-height: 1.22;
+    margin: 0 0 4.5pt 0;
+    text-indent: 12pt;
+}
+
+p.no-indent {
+    text-indent: 0;
+}
+
+/* Bullet lists */
+ul, ol {
+    margin: 2pt 0 5pt 14pt;
+    padding: 0;
+}
+
+li {
+    font-size: 9pt;
+    line-height: 1.2;
+    margin-bottom: 2pt;
+}
+
+/* Code */
+code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 8.2pt;
+}
+
+pre {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 7.8pt;
+    background: #f8f8f8;
+    border: 0.5pt solid #ccc;
+    padding: 3.5pt;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 3pt 0 5pt 0;
+    break-inside: avoid;
+}
+
+/* Spanning elements (Tables and Figures that span across columns) */
+.span-columns {
+    column-span: all;
+    margin: 8pt 0 10pt 0;
+    break-inside: avoid;
+}
+
+.column-element {
+    width: 100%;
+    margin: 6pt 0 8pt 0;
+    break-inside: avoid;
+}
+
+/* Table styling */
+.ieee-table-wrap {
+    text-align: center;
+    margin-bottom: 8pt;
+    break-inside: avoid;
+}
+
+.table-title {
+    font-size: 7.8pt;
+    text-transform: uppercase;
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 1.5pt;
+}
+
+.table-caption {
+    font-size: 7.8pt;
+    font-style: italic;
+    text-align: center;
+    margin-bottom: 3pt;
+}
+
+table.ieee-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+    line-height: 1.15;
+    margin: 0 auto;
+    border-top: 0.8pt solid #000;
+    border-bottom: 0.8pt solid #000;
+}
+
+table.ieee-table th {
+    border-top: 0.8pt solid #000;
+    border-bottom: 0.5pt solid #000;
+    padding: 2.5pt 2.5pt;
+    font-weight: bold;
+    text-align: center;
+    vertical-align: bottom;
+}
+
+table.ieee-table td {
+    border-top: 0.25pt solid #ddd;
+    padding: 2.2pt 2.5pt;
+    vertical-align: top;
+    text-align: left;
+}
+
+table.ieee-table td.center {
+    text-align: center;
+}
+
+table.ieee-table td.right {
+    text-align: right;
+}
+
+table.ieee-table tbody tr:first-child td {
+    border-top: 0.5pt solid #000;
+}
+
+.table-notes {
+    font-size: 7.2pt;
+    line-height: 1.18;
+    text-align: justify;
+    margin-top: 2.5pt;
+}
+
+/* Figure styling */
+.ieee-fig-wrap {
+    text-align: center;
+    margin: 6pt 0 8pt 0;
+    break-inside: avoid;
+}
+
+.fig-caption {
+    font-size: 8pt;
+    line-height: 1.18;
+    text-align: justify;
+    margin-top: 3pt;
+}
+
+.fig-caption strong {
+    font-weight: bold;
+}
+
+/* Equations */
+.equation-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4pt 0 5pt 0;
+    padding: 0 4pt;
+    font-size: 9pt;
+    break-inside: avoid;
+}
+
+.equation-math {
+    flex-grow: 1;
+    text-align: center;
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-style: italic;
+}
+
+.equation-number {
+    font-family: 'Times New Roman', Times, serif;
+    font-style: normal;
+    text-align: right;
+}
+
+/* References */
+ol.ieee-references {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+ol.ieee-references li {
+    font-size: 7.8pt;
+    line-height: 1.16;
+    margin-bottom: 2.5pt;
+    text-indent: -16pt;
+    margin-left: 16pt;
+    text-align: justify;
+}
+
+a {
+    color: #000;
+    text-decoration: underline;
+}
+
+.math {
+    font-family: 'Cambria Math', 'Times New Roman', serif;
+    font-style: italic;
+}
+</style>
+</head>
+<body>
+    
+    <div class="ieee-header">
+        <h1 class="paper-title">SemanticSync: Schema-Level Semantic Merge Policies for Local-First Relational Databases</h1>
+        <div class="author-block">
+            <div class="author-col">
+                <div class="author-name">Pathak Ashmit Akhilesh</div>
+                <div class="author-dept">Dept. of Computer Science and Engineering</div>
+                <div class="author-inst">Vellore Institute of Technology</div>
+                <div class="author-city">Vellore, India</div>
+                <div class="author-email">pathak.ashmit2025@vitstudent.ac.in</div>
+            </div>
+            <div class="author-col">
+                <div class="author-name">Yash Bohra</div>
+                <div class="author-dept">Dept. of Computer Science and Engineering</div>
+                <div class="author-inst">Vellore Institute of Technology</div>
+                <div class="author-city">Vellore, India</div>
+                <div class="author-email">yash.bohra2025@vitstudent.ac.in</div>
+            </div>
+        </div>
+        <div class="abstract-keywords-block">
+            <div class="abstract-text"><span class="abstract-heading">Abstract</span>—Local-first software lets client devices read and write local data while offline, then sync when connected. While Conflict-Free Replicated Data Types (CRDTs) guarantee mathematical convergence for specific data structures, naive syntactic policies like Last-Writer-Wins often discard business intent and break relational constraints. We present SemanticSync, a replication and merge middleware built for local-first SQLite databases. SemanticSync provides schema-assigned pairwise merge policies (<code>SUM</code>, <code>BOUNDED_SUM</code>, <code>AVG</code>, <code>APPEND</code>, <code>LWW</code>, <code>MIN</code>, <code>MAX</code>, and <code>REJECT</code>), explicit numeric <code>INCREMENT</code> tracking, non-destructive foreign-key orphan quarantine, and checkpoint-assisted causal log compaction. We evaluated the engine across two benchmark suites: a historical state-based stress workload and a 90-trial explicit-<code>INCREMENT</code> matrix across 1,000, 5,000, and 10,000 operations at 5%, 20%, and 50% conflict densities. Across all 90 validated trials, SemanticSync achieved 100.0% Semantic Correctness Rate (SCR) and 100.0% Benchmark-Row Value Agreement (RVAR) against an arithmetic oracle, whereas Last-Writer-Wins scored 0.0% SCR by discarding concurrent deltas. Batch synchronization incurred measurable timing differences compared to an uninstrumented SQL baseline (median deltas from 449.7 ms to 84,368.7 ms), reflecting the concrete cost of operation logging, receipt tracking, and foreign-key checks.</div>
+            <div class="keywords-text"><span class="keywords-heading">Keywords</span>—Local-first software, SQLite replication, semantic merge policies, conflict resolution, referential integrity, causal log compaction.</div>
+        </div>
+    </div>
+    
+    <div class="two-column-layout"><h2 class="ieee-h1">I. INTRODUCTION</h2><h3 class="ieee-h2"><em>A. The Local-First Relational Dilemma</em></h3><p>Local-first computing gives users local ownership and instant access to their data without continuous cloud access [8]. Devices work offline and sync when connected. This model is attractive, but relational databases complicate it. Relational applications rely on primary and foreign keys. Local updates carry specific business rules. When disconnected replicas sync after hours or days of network isolation, simple reconciliation mechanisms break down.</p><p>Pioneering CRDT research establishes strong eventual consistency for primitive data structures [11], [6]. However, converging to an identical state is not the same as being correct. In relational applications, picking a single winner across conflicting updates silently discards user intent and violates domain rules.</p><h3 class="ieee-h2"><em>B. The Convergence vs. Correctness Paradox</em></h3><p>To see why syntactic convergence falls short of semantic correctness, consider an inventory table:</p><pre><code>CREATE TABLE inventory (
+    item_id INTEGER PRIMARY KEY,
+    quantity INTEGER
+);</code></pre><p>Suppose item 1 starts with a stock of 100 in the common ancestor state. While disconnected, two store replicas record independent sales:</p><ul><li>Replica A sells 15 units: <code>UPDATE inventory SET quantity = 85 WHERE item_id = 1;</code></li><li>Replica B sells 20 units: <code>UPDATE inventory SET quantity = 80 WHERE item_id = 1;</code></li></ul><p>Under a standard Last-Writer-Wins (LWW) rule [4], the replica with the higher timestamp wins. If Replica B has the later timestamp, both databases converge to 80 units. The databases match, but 15 sold units simply vanish. The true inventory reflecting both transactions is 65 units.</p><p>Similar failures happen across other domains:</p><ul><li><em>Collaborative sensing:</em> Averaging sensor readings (<code>AVG</code>) or appending clinical notes (<code>APPEND</code>) fails when one writer overwrites another.</li><li><em>Security and access control:</em> Edits to user roles or patient blood types should never be resolved by timestamps. They require human intervention (<code>REJECT</code>).</li><li><em>Referential integrity:</em> Deleting a parent row while another replica inserts a child row leaves orphan rows or triggers foreign-key constraint panics.</li></ul><h3 class="ieee-h2"><em>C. Contributions</em></h3><p>We built SemanticSync to bridge the gap between syntactic convergence and domain correctness. Our main contributions are:</p><ol><li><strong>Schema-assigned pairwise policies:</strong> A type-safe framework that binds merge policies (<code>SUM</code>, <code>BOUNDED_SUM</code>, <code>AVG</code>, <code>APPEND</code>, <code>LWW</code>, <code>MIN</code>, <code>MAX</code>, <code>REJECT</code>) directly to table columns.</li><li><strong>Tracked explicit-INCREMENT model:</strong> An operation-logging model that separates absolute state overwrites from additive numeric increments, preventing duplicate replay with stable receipts.</li><li><strong>Foreign-key quarantine protocol:</strong> A protocol that moves dependent child rows into <code>_ss_quarantine</code> before parent deletion, keeping <code>PRAGMA foreign_keys = ON</code> active throughout.</li><li><strong>Checkpoint log compaction:</strong> A pruning protocol that checks acknowledgment vectors, replica membership, and snapshot integrity before trimming the operation log.</li><li><strong>Empirical evaluation:</strong> A 90-trial matrix spanning 1,000 to 10,000 operations at varying conflict densities, measuring correctness, replica agreement, and sync overhead.</li></ul><h2 class="ieee-h1">II. SYSTEM ARCHITECTURE</h2><p>We built SemanticSync as an embeddable middleware between local application SQL execution and replication channels (Fig. 1). The engine sits alongside SQLite on each client device, intercepting writes and managing sync sessions.</p><div class="span-columns"><div class="ieee-fig-wrap"><svg class="architecture" role="img" aria-labelledby="arch-title arch-desc" viewBox="0 0 900 228" xmlns="http://www.w3.org/2000/svg"><title id="arch-title">SemanticSync system architecture</title><desc id="arch-desc">Three replica, engine, and sync-service groups with data flow from replicas through the engine to sync services.</desc><rect x="12" y="8" width="278" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="26" y="31" class="arch-head">Client replicas</text><rect x="24" y="42" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="58" class="arch-label">Application / client UI</text><rect x="24" y="69" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="85" class="arch-label">SQLite driver</text><rect x="24" y="96" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="112" class="arch-label">Local SQLite database</text><rect x="24" y="123" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="139" class="arch-label">Supported tracked writes</text><rect x="312" y="8" width="318" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="326" y="31" class="arch-head">SemanticSync engine</text><rect x="324" y="42" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="58" class="arch-label">Schema inspector + validator</text><rect x="324" y="69" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="85" class="arch-label">Three-way conflict detector</text><rect x="324" y="96" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="112" class="arch-label">Semantic policy resolver</text><rect x="324" y="123" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="139" class="arch-label">Foreign-key quarantine</text><rect x="324" y="150" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="166" class="arch-label">HLC metadata</text><rect x="324" y="177" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="193" class="arch-label">Checkpoint / compaction</text><rect x="648" y="8" width="240" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="662" y="31" class="arch-head">Sync services</text><rect x="660" y="42" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="58" class="arch-label">Base ancestor store</text><rect x="660" y="69" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="85" class="arch-label">Checkpoint manifest store</text><rect x="660" y="96" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="112" class="arch-label">FastAPI sync reconciler</text><path d="M292 112 H307" stroke="#55758f" stroke-width="2" marker-end="url(#arrow)"/><path d="M630 112 H643" stroke="#55758f" stroke-width="2" marker-end="url(#arrow)"/><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#55758f"/></marker></defs></svg><div class="fig-caption"><strong>Fig. 1.</strong> SemanticSync architectural layers, illustrating the flow of tracked replica mutations through the schema inspector, conflict detector, semantic resolver, and quarantine manager.</div></div></div><h3 class="ieee-h2"><em>A. Storage Layout and Tracked Operation Log</em></h3><p>Each local SQLite replica holds user tables and four internal metadata tables:</p><ul><li><code>_ss_change_log</code>: Stores local and received column mutations (<code>table_name</code>, <code>row_id</code>, <code>column_name</code>, <code>old_value</code>, <code>new_value</code>, <code>ts_pt</code>, <code>ts_l</code>, <code>replica_id</code>, <code>op_type</code>, <code>origin_id</code>, <code>sequence</code>, <code>source_id</code>, <code>depends_on</code>, <code>bounded_delta</code>, <code>bounds_min</code>, <code>bounds_max</code>).</li><li><code>_ss_quarantine</code>: Holds child rows isolated during parent deletions (<code>quarantine_id</code>, <code>table_name</code>, <code>row_id</code>, <code>row_payload</code>, <code>parent_table</code>, <code>parent_row_id</code>, <code>reason</code>, <code>quarantined_at</code>, <code>status</code>).</li><li><code>_ss_compacted_receipts</code>: Records hashes and IDs of compacted entries to catch and discard duplicate deliveries.</li><li><code>_ss_checkpoint_metadata</code>: Tracks checkpoint incarnation IDs and snapshot epochs.</li></ul><p>We separate absolute <code>SET</code>/<code>UPDATE</code> operations from numeric <code>INCREMENT</code> operations. When an application calls <code>apply_increment</code>, the engine assigns a unique <code>origin_id</code> and records the signed delta. During sync, incoming increments apply once and record a stable receipt in the change log. This stops replay attacks and duplicate delivery. The design borrows concepts from operation-based CRDTs [24] by syncing small deltas instead of entire rows, saving network bandwidth. However, SemanticSync does not claim general CRDT convergence across arbitrary topologies. Its guarantees apply strictly to pairwise synchronizations.</p><h3 class="ieee-h2"><em>B. Hybrid Logical Clocks</em></h3><p>To order operations without synchronized physical clocks, we use Hybrid Logical Clocks (HLC) [9]. Each replica tracks physical time $pt$, a logical counter $l$, and samples the local wall clock $pt_{	ext{wall}}$. On a local write, if $pt_{	ext{wall}} > pt_{	ext{local}}$, the clock advances to $(pt_{	ext{wall}}, 0)$; otherwise, it increments the logical counter to $(pt_{	ext{local}}, l_{	ext{local}} + 1)$. When receiving an operation with timestamp $(pt_{	ext{msg}}, l_{	ext{msg}})$, the clock updates as follows:</p><div class="equation-wrap"><div class="equation-math">$$pt' = \max(pt_{	ext{local}}, pt_{	ext{msg}}, pt_{	ext{wall}})$$</div><div class="equation-number"></div></div><div class="equation-wrap"><div class="equation-math">$$l' = egin{cases} \max(l_{	ext{local}}, l_{	ext{msg}}) + 1 & 	ext{if } pt' = pt_{	ext{local}} = pt_{	ext{msg}} \ l_{	ext{local}} + 1 & 	ext{if } pt' = pt_{	ext{local}} \ l_{	ext{msg}} + 1 & 	ext{if } pt' = pt_{	ext{msg}} \ 0 & 	ext{otherwise } (pt' = pt_{	ext{wall}}) \end{cases}$$</div><div class="equation-number"></div></div><p>The logical counter advances whenever the physical clock fails to jump strictly ahead of prior timestamps. It resets to zero only when the local wall clock catches up and overtakes them. These HLC timestamps provide deterministic tie-breaking for timestamped policies, though they do not replace causal vector clocks in full mesh networks.</p><h2 class="ieee-h1">III. SEMANTIC MERGE POLICY FRAMEWORK</h2><h3 class="ieee-h2"><em>A. Mathematical Formalization</em></h3><p>Let $\mathcal{V}$ denote attribute values, and let $\mathcal{M}$ represent operation metadata (replica ID, HLC timestamp, and operation identity). A three-way semantic resolution function $\mathcal{R}$ maps these inputs:</p><div class="equation-wrap"><div class="equation-math">$$\mathcal{R}: \mathcal{V} 	imes (\mathcal{V} 	imes \mathcal{M}) 	imes (\mathcal{V} 	imes \mathcal{M}) 	o \mathcal{V} \cup \{ot\}$$</div><div class="equation-number"></div></div><p>Here, $ot$ indicates an unresolved conflict flagged for manual review.</p><p>Pairwise merge symmetry requires that swapping the two replica inputs produces the same result:</p><div class="equation-wrap"><div class="equation-math">$$\mathcal{R}(v_{	ext{base}}, (v_A, m_A), (v_B, m_B)) = \mathcal{R}(v_{	ext{base}}, (v_B, m_B), (v_A, m_A))$$</div><div class="equation-number">(1)</div></div><h3 class="ieee-h2"><em>B. Supported Semantic Policies</em></h3><p>SemanticSync implements eight schema-level merge policies (Table I).</p><div class="column-element"><div class="ieee-table-wrap">
+<div class="table-title">TABLE I</div>
+<div class="table-caption">IMPLEMENTED SEMANTIC MERGE POLICIES AND TESTED PROPERTIES</div>
+<table class="ieee-table"><thead><tr>
+<th>Policy</th>
+<th>Compatible Types</th>
+<th>Resolution Semantics</th>
+<th>Algebraic Properties &amp; Boundaries</th>
+</tr></thead><tbody>
+<tr>
+<td class=""><strong><code>SUM</code></strong></td>
+<td class="">Numeric (<code>INT</code>, <code>REAL</code>)</td>
+<td class="">$v_{	ext{base}} + (v_A - v_{	ext{base}}) + (v_B - v_{	ext{base}})$</td>
+<td class="">Commutative for fixed base; delta addition associative; non-idempotent.</td>
+</tr>
+<tr>
+<td class=""><strong><code>BOUNDED_SUM</code></strong></td>
+<td class="">Numeric (<code>INT</code>, <code>REAL</code>)</td>
+<td class="">Delta checked against $[\min, \max]$; flags $ot$ if out of bounds</td>
+<td class="">Invariant-preserving; rejects unsafe candidate states without clamping.</td>
+</tr>
+<tr>
+<td class=""><strong><code>AVG</code></strong></td>
+<td class="">Numeric (<code>INT</code>, <code>REAL</code>)</td>
+<td class="">$(v_A + v_B) / 2.0$</td>
+<td class="">Commutative; strictly non-associative; suitable for pairwise sensor merges.</td>
+</tr>
+<tr>
+<td class=""><strong><code>APPEND</code></strong></td>
+<td class="">Text (<code>TEXT</code>)</td>
+<td class="">Concatenates text ordered by replica ID</td>
+<td class="">Pairwise commutative; lacks element-level identity; not arbitrary $N$-way join.</td>
+</tr>
+<tr>
+<td class=""><strong><code>LWW</code></strong></td>
+<td class="">Any SQLite type</td>
+<td class="">Higher HLC timestamp wins; ties broken by replica ID</td>
+<td class="">Syntactically deterministic; disregards business semantics.</td>
+</tr>
+<tr>
+<td class=""><strong><code>MIN</code> / <code>MAX</code></strong></td>
+<td class="">Numeric types</td>
+<td class="">$\min(v_A, v_B)$ or $\max(v_A, v_B)$</td>
+<td class="">Commutative, associative, idempotent (semilattice).</td>
+</tr>
+<tr>
+<td class=""><strong><code>REJECT</code></strong></td>
+<td class="">Any SQLite type</td>
+<td class="">Emits $ot$ (flagged for review)</td>
+<td class="">Safety stop preventing automated silent overwrites.</td>
+</tr>
+</tbody></table>
+</div></div><h3 class="ieee-h2"><em>C. Tombstone Reconciliation (Update vs. Delete)</em></h3><p>When one replica updates a row while another deletes it, SemanticSync flags an <code>UPDATE_DELETE</code> conflict. Concurrent update-remove conflicts present a classic dilemma in distributed systems [25]. Rather than imposing a single theoretical rule, SemanticSync lets developers configure one of three strategies:</p><ul><li><code>DELETE_WINS</code>: Deletion takes precedence. The row is removed and the concurrent update is dropped.</li><li><code>UPDATE_RESURRECTS</code>: The update takes precedence. The row is kept with its updated values.</li><li><code>FLAG_FOR_REVIEW</code>: The conflict moves to <code>MergeManager</code> for manual inspection.</li></ul><h3 class="ieee-h2"><em>D. Type Compatibility and Validation</em></h3><p>Before assigning a policy, our <code>PolicyValidator</code> inspects SQLite column affinities using <code>PRAGMA table_info</code>. If an invalid binding is attempted, such as setting <code>SUM</code> on a <code>TEXT</code> column, the engine rejects it immediately with HTTP 422 Unprocessable Entity. This fail-fast check catches configuration mistakes at startup.</p><h2 class="ieee-h1">IV. FOREIGN-KEY QUARANTINE BOUNDARY</h2><p>In relational systems, multi-master replication easily violates referential integrity. In SQLite, referential constraints require <code>PRAGMA foreign_keys = ON</code>.</p><h3 class="ieee-h2"><em>A. The Referential Cascade Problem</em></h3><p>Consider a parent table <code>departments(dept_id)</code> and a child table <code>employees(emp_id, dept_id)</code>. Suppose Replica A deletes a department while Replica B inserts or modifies an employee in that department. Standard replication runs into a dead end:</p><ol><li>Replaying the department deletion on Replica B triggers a foreign-key error (<code>sqlite3.IntegrityError</code>).</li><li>Turning off foreign keys (<code>PRAGMA foreign_keys = OFF</code>) leaves corrupt orphan rows in the database.</li></ul><h3 class="ieee-h2"><em>B. Quarantine Isolation Protocol</em></h3><p>To keep referential integrity intact without losing data, we built an atomic orphan quarantine protocol:</p><ol><li><strong>Connection enforcement:</strong> Every database connection enables <code>PRAGMA foreign_keys = ON</code> before running transactions.</li><li><strong>Dependency introspection:</strong> Before deleting a parent row from table $T$ with primary key $K$, the engine runs <code>PRAGMA foreign_key_list</code> across user tables to spot referencing child rows.</li><li><strong>Atomic quarantine:</strong> The engine copies any referencing child rows into <code>_ss_quarantine</code> as JSON payloads, together with parent references and timestamps.</li><li><strong>Child and parent deletion:</strong> The engine deletes child rows first, then deletes the parent row. Foreign keys remain satisfied throughout.</li><li><strong>Post-validation:</strong> Before calling <code>COMMIT</code>, the transaction runs <code>PRAGMA foreign_key_check</code>. Any violation rolls back the entire batch.</li><li><strong>Operator restoration:</strong> Operators can view quarantined rows via <code>GET /api/v1/quarantine</code> and either reassign them to a new parent (<code>POST /api/v1/quarantine/{id}/resolve</code>) or delete them permanently.</li></ul><h2 class="ieee-h1">V. CHECKPOINT-ASSISTED LOG COMPACTION</h2><p>Logging every mutation causes SQLite databases to grow indefinitely and slows down sync replay. To prune historical logs safely, we implemented a checkpoint protocol.</p><h3 class="ieee-h2"><em>A. Compaction Eligibility Checks</em></h3><p>Pruning an entry too early can permanently strand a disconnected replica. SemanticSync only prunes an operation when all of the following conditions hold:</p><ol><li><strong>Unanimous acknowledgment:</strong> The operation ID must be acknowledged by all enrolled replicas.</li><li><strong>Payload hash match:</strong> The SHA-256 hash of the operation payload must match across all replica receipts.</li><li><strong>Stable horizon cutoff:</strong> The cutoff timestamp $H_{	ext{stable}}$ is the minimum of the highest acknowledged HLC timestamps across all replicas:</li></ul><p>$$H_{	ext{stable}} = \min_{r \in \mathcal{R}} \left( \max_{op \in 	ext{ACK}_r} 	ext{HLC}(op)</p><p>ight)$$</p><p>Only operations with $	ext{HLC} < H_{	ext{stable}}$ can be pruned.</p><ol><li><strong>Dependency closure:</strong> An operation cannot be pruned if any active change-log entry depends on it.</li></ul><h3 class="ieee-h2"><em>B. Atomic Pruning Execution</em></h3><p>During a <code>BEGIN IMMEDIATE</code> transaction, eligible entries are deleted from <code>_ss_change_log</code>. At the same time, compact receipt records are inserted into <code>_ss_compacted_receipts</code>. If an out-of-date peer later sends a pruned operation, the engine checks <code>_ss_compacted_receipts</code> and drops the duplicate without error.</p><h2 class="ieee-h1">VI. EMPIRICAL EVALUATION</h2><p>We evaluated SemanticSync across two benchmark suites:</p><ol><li><strong>Historical SET-based stress benchmark:</strong> A state-diffing workload with 1,000, 5,000, and 10,000 operations at 5%, 20%, and 50% conflict densities (two paired trials per cell).</li><li><strong>Explicit-INCREMENT evaluation matrix:</strong> A 90-trial matrix auditing dedicated operation-based increments across nine configurations (10 independent seeds per cell), following standard synthetic CRDT benchmark designs [26].</li></ul><p>All benchmarks ran on a single Windows 11 host (Python 3.14.3, SQLite 3.50.4, <code>journal_mode = DELETE</code>).</p><h3 class="ieee-h2"><em>A. Evaluation Metrics</em></h3><ul><li><strong>Semantic Correctness Rate (SCR):</strong> The percentage of conflict rows matching the arithmetic oracle ($v_{	ext{expected}} = v_{	ext{base}} + \Delta_A + \Delta_B$), evaluated across both replicas ($2 	imes C$ observations per trial).</li><li><strong>Benchmark-Row Value Agreement (RVAR):</strong> The percentage of matching <code>bench_rows.value</code> entries across both replicas, measuring replica convergence.</li><li><strong>Valid Resolution Accuracy (VRA):</strong> The percentage of values satisfying domain constraints (unmeasured in synthetic runs lacking domain rules).</li><li><strong>Paired Timing Difference:</strong> The synchronization time difference between SemanticSync and the baseline: $\Delta = T_{	ext{engine}} - T_{	ext{baseline}}$.</li></ul><h3 class="ieee-h2"><em>B. Historical SET-Based Evaluation Results</em></h3><p>In the state-based benchmark (Table II and Table III), SemanticSync reached SCR scores between 97.50% and 98.25%. In contrast, LWW scored 0.00% against the additive oracle.</p><div class="span-columns"><div class="ieee-table-wrap">
+<div class="table-title">TABLE II</div>
+<div class="table-caption">HISTORICAL SET-BASED REPEATED STRESS MEASUREMENTS (2 PAIRED TRIALS PER CELL)</div>
+<table class="ieee-table"><thead><tr>
+<th>Operations</th>
+<th>Conflict Density</th>
+<th>LWW SCR (%)</th>
+<th>SemanticSync SCR (%)</th>
+<th>RVAR Agreement (%)</th>
+</tr></thead><tbody>
+<tr>
+<td class="right">1,000</td>
+<td class="right">5%</td>
+<td class="right">0.0%</td>
+<td class="right">98.0%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">20%</td>
+<td class="right">0.0%</td>
+<td class="right">97.5%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">50%</td>
+<td class="right">0.0%</td>
+<td class="right">98.2%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">5%</td>
+<td class="right">0.0%</td>
+<td class="right">98.0%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">20%</td>
+<td class="right">0.0%</td>
+<td class="right">98.0%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">50%</td>
+<td class="right">0.0%</td>
+<td class="right">98.2%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">5%</td>
+<td class="right">0.0%</td>
+<td class="right">98.2%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">20%</td>
+<td class="right">0.0%</td>
+<td class="right">98.2%</td>
+<td class="right">100.0%</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">50%</td>
+<td class="right">0.0%</td>
+<td class="right">97.7%</td>
+<td class="right">100.0%</td>
+</tr>
+</tbody></table>
+</div></div><div class="span-columns"><div class="ieee-table-wrap">
+<div class="table-title">TABLE III</div>
+<div class="table-caption">HISTORICAL SET-BASED SYNCHRONIZATION DURATIONS AND PAIRED DELTAS</div>
+<table class="ieee-table"><thead><tr>
+<th>Operations</th>
+<th>Density</th>
+<th>LWW Sync Median [Range] (s)</th>
+<th>SemanticSync Median [Range] (s)</th>
+<th>Paired Delta Median [Range] (ms)</th>
+</tr></thead><tbody>
+<tr>
+<td class="right">1,000</td>
+<td class="right">5%</td>
+<td class="">1.109 [1.091–1.127]</td>
+<td class="">1.132 [1.120–1.143]</td>
+<td class="">+22.79 [+16.31–+29.26]</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">20%</td>
+<td class="">3.435 [3.333–3.537]</td>
+<td class="">3.363 [3.335–3.392]</td>
+<td class="">-71.81 [-145.17–+1.55]</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">50%</td>
+<td class="">7.881 [7.847–7.915]</td>
+<td class="">7.774 [7.766–7.782]</td>
+<td class="">-107.20 [-149.34–-65.06]</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">5%</td>
+<td class="">11.345 [11.335–11.354]</td>
+<td class="">11.340 [11.228–11.451]</td>
+<td class="">-5.02 [-107.00–+96.97]</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">20%</td>
+<td class="">29.214 [25.044–33.384]</td>
+<td class="">32.019 [30.885–33.152]</td>
+<td class="">+2,804.71 [-231.96–+5,841.38]</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">50%</td>
+<td class="">74.180 [70.128–78.231]</td>
+<td class="">75.602 [72.763–78.440]</td>
+<td class="">+1,421.64 [+208.90–+2,634.38]</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">5%</td>
+<td class="">76.220 [73.793–78.646]</td>
+<td class="">74.825 [73.058–76.593]</td>
+<td class="">-1,394.30 [-2,053.43–-735.17]</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">20%</td>
+<td class="">118.678 [98.276–139.080]</td>
+<td class="">147.645 [143.627–151.664]</td>
+<td class="">+28,967.53 [+4,546.73–+53,388.32]</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">50%</td>
+<td class="">193.364 [192.004–194.723]</td>
+<td class="">188.088 [184.699–191.476]</td>
+<td class="">-5,276.10 [-10,024.15–-528.04]</td>
+</tr>
+</tbody></table>
+</div></div><p>Auditing the data revealed why SemanticSync missed the remaining 2%: when both replicas made the same non-base update independently ($v_A = v_B$), state diffing detected no divergence and applied nothing. But the additive oracle expected both changes ($v_{	ext{base}} + 2\Delta$). This limitation in state-level diffing prompted us to build the explicit-<code>INCREMENT</code> model.</p><h3 class="ieee-h2"><em>C. Explicit-INCREMENT Evaluation Matrix (Audited 9-Configuration Suite)</em></h3><p>To test the operation-based model, we ran a complete 9-configuration matrix with 10 independent trials per configuration (90 trials total).</p><p>Each configuration used 10 dedicated seeds: 1k/5% (seeds 20263000–20263009), 1k/20% (seeds 20263100–20263109), 1k/50% (seeds 20263200–20263209), 5k/5% (seeds 20263300–20263309), 5k/20% (seeds 20263400–20263409), 5k/50% (seeds 20263500–20263509), 10k/5% (seeds 20263600–20263609), 10k/20% (seeds 20263700–20263709), and 10k/50% (seeds 20263800–20263809). Each trial created clean replica databases, applied local operations, and executed one batch sync.</p><p>We checked all trials using <code>research.experiments.validate_increment_evaluation</code>. Every trial passed without error. SQLite reported clean database integrity (<code>PRAGMA integrity_check == ok</code>), change logs matched expected receipts ($N + C$ per replica), and final values showed zero error against the oracle.</p><div class="span-columns"><div class="ieee-table-wrap">
+<div class="table-title">TABLE IV</div>
+<div class="table-caption">AUDITED EXPLICIT-INCREMENT NINE-CONFIGURATION EVALUATION MATRIX (10 INDEPENDENT SEEDS PER CONFIGURATION, 90 TRIALS TOTAL)</div>
+<table class="ieee-table"><thead><tr>
+<th>Operations</th>
+<th>Conflict Density</th>
+<th>Trials</th>
+<th>SCR Summary</th>
+<th>RVAR Summary</th>
+<th>Median Paired Timing Delta ($T_{	ext{inc}} - T_{	ext{app}}$)</th>
+<th>Interquartile Range (IQR)</th>
+<th>Validation Status</th>
+</tr></thead><tbody>
+<tr>
+<td class="right">1,000</td>
+<td class="right">5%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">449.7 ms</td>
+<td class="right">30.6 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">20%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">668.8 ms</td>
+<td class="right">46.1 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">1,000</td>
+<td class="right">50%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">1,094.7 ms</td>
+<td class="right">46.9 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">5%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">8,723.3 ms</td>
+<td class="right">203.2 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">20%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">13,072.8 ms</td>
+<td class="right">251.1 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">5,000</td>
+<td class="right">50%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">22,586.3 ms</td>
+<td class="right">444.2 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">5%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">32,056.3 ms</td>
+<td class="right">148.4 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">20%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">49,347.5 ms</td>
+<td class="right">376.8 ms</td>
+<td class="center">PASS</td>
+</tr>
+<tr>
+<td class="right">10,000</td>
+<td class="right">50%</td>
+<td class="right">10</td>
+<td class="">100.0% (all trials)</td>
+<td class="">100.0% (all trials)</td>
+<td class="right">84,368.7 ms</td>
+<td class="right">5,995.1 ms</td>
+<td class="center">PASS</td>
+</tr>
+</tbody></table>
+</div></div><p><em>Key Observations:</em></p><ol><li><strong>Semantic correctness:</strong> Both <code>engine_increment</code> and the direct <code>application_sum</code> baseline scored 100.0% SCR across all 90 trials under the additive oracle ($v_{	ext{expected}} = v_{	ext{base}} + \Delta_A + \Delta_B$). Generic LWW scored 0.0% on conflict rows because it simply chose one writer and dropped the other delta.</li><li><strong>Replica agreement:</strong> RVAR reached 100.0% across all 90 trials for the <code>bench_rows.value</code> column, verifying complete pairwise convergence.</li><li><strong>Sync timing differences:</strong> Paired timing differences ($\Delta = T_{	ext{engine\_increment}} - T_{	ext{application\_sum}}$) were positive across all 90 trials. The gap grew with operation count, from 449.7 ms at 1k/5% to 84,368.7 ms at 10k/50%. The direct baseline executes bare SQL updates without logging metadata, writing receipts, checking HLC timestamps, or enforcing quarantine rules. Because our tests do not isolate the latency of each individual mechanism, we report these numbers as descriptive timing differences against a narrower baseline, rather than claiming a speed advantage.</li></ul><h2 class="ieee-h1">VII. RELATED WORK AND COMPARISON</h2><p>Researchers have explored distributed consistency and conflict resolution from multiple angles:</p><ul><li><strong>CRDT foundations:</strong> Shapiro et al. [11] formalized state-based and operation-based CRDTs, while Gomes et al. [6] verified strong eventual consistency with proof assistants. Kleppmann and Beresford [7] designed conflict-free JSON types, and Kleppmann et al. [8] set out core local-first principles. SemanticSync follows these local-first goals, but targets SQLite columns with schema-level policies rather than custom document trees.</li><li><strong>Invariant preservation:</strong> Balegas et al. [1], [2] developed escrow-based bounded counters and invariant-preserving replication (IPA). Lewchenko et al. [10] created conflict-aware data types with consistency guards. SemanticSync's <code>BOUNDED_SUM</code> checks bounds locally and flags violations immediately, functioning as a relational safety check rather than a distributed escrow coordinator.</li><li><strong>Relational CRDTs and SQLite extensions:</strong> Synql [14] coordinates relational constraints across replicas, and CRDV [15] introduces replicated views. Thomassen and Yu [16] analyze updatable views under eventual consistency, and Lopes [17] built Antidote SQL. In work close to ours, Tomter and Yu [23] added CRDT capabilities to SQLite using auxiliary delta tables and SQL triggers without patching SQLite itself. Industrial projects such as ElectricSQL [13] and <code>cr-sqlite</code> [12] provide SQLite sync engines, and Riffle [22] offers reactive relational state. Unlike systems that mandate custom virtual tables or full-database CRDT rewrites, SemanticSync works over standard, unmodified SQLite tables.</li><li><strong>Integrity and distributed trade-offs:</strong> Schiefer et al. [18] proposed history forking when data integrity conflicts cannot be merged cleanly. Köhler et al. [19] designed ConLoc for invariant checks, Haas et al. [20] proved safe local execution in LoRe, and Borrego et al. [21] proved coordination-free convergence. Edwards et al. [5] studied schema migrations in local software, which complement our runtime foreign-key orphan handling. Cloud databases like Spanner [3] and Dynamo [4] illustrate classic consistency-availability trade-offs. Local-first designs avoid these trade-offs by letting clients work independently offline. SemanticSync adds practical orphan quarantine and log compaction for standalone SQLite deployments.</li></ul><h2 class="ieee-h1">VIII. DISCUSSION AND LIMITATIONS</h2><p>We note four boundaries and trade-offs in our current implementation:</p><ol><li><strong>Policy algebra:</strong> Merge policies operate pairwise. While <code>MIN</code> and <code>MAX</code> form complete semilattices, <code>SUM</code> is associative only over exact arithmetic with a fixed base, and <code>AVG</code> is non-associative. Pairwise policies do not guarantee convergence across arbitrary multi-node meshes.</li><li><strong>Sequential benchmarks:</strong> Our stress tests ran mutations sequentially before batch synchronization. This setup tests merge logic and receipt auditing thoroughly, but does not measure multi-threaded disk contention.</li><li><strong>Relational scope:</strong> The quarantine protocol supports single-column primary and foreign keys. Composite foreign keys and circular references trigger safe fail-stop errors. Direct SQL console writes bypass quarantine tracking.</li><li><strong>Log compaction assumptions:</strong> Compaction requires unanimous acknowledgment across all registered replicas. While tested against crash recovery and restarts, power-loss fsync durability is not independently certified.</li></ul><h2 class="ieee-h1">IX. CONCLUSION</h2><p>We presented SemanticSync, a schema-level merge middleware for local-first SQLite databases. By attaching semantic policies directly to table columns and tracking explicit numeric increments, SemanticSync resolves concurrent updates in line with business rules where Last-Writer-Wins fails. The foreign-key quarantine boundary isolates dependent rows without silent data loss, and checkpoint compaction prevents unbounded log growth. Across 90 reproducible benchmark trials, SemanticSync achieved 100.0% semantic correctness and 100.0% row value agreement against an arithmetic oracle. The system demonstrates that local-first relational replication can protect application semantics and referential integrity while keeping SQLite simple and lightweight.</p><h2 class="ieee-h1">References</h2><ol class="ieee-references"><li>[1] V. Balegas, D. Serra, S. Duarte, C. Ferreira, R. Rodrigues, N. Preguiça, M. Shapiro, and M. Najafzadeh, "Extending Eventually Consistent Cloud Databases for Enforcing Numeric Invariants," arXiv:1503.09052, 2015.</li><li>[2] V. Balegas, S. Duarte, C. Ferreira, R. Rodrigues, and N. Preguiça, "IPA: Invariant-Preserving Applications for Weakly-Consistent Replicated Databases," <em>Proc. VLDB Endow.</em>, vol. 12, no. 4, pp. 404–418, 2018.</li><li>[3] J. C. Corbett et al., "Spanner: Google’s Globally-Distributed Database," <em>ACM Trans. Comput. Syst.</em>, vol. 31, no. 3, Art. 8, 2013.</li><li>[4] G. DeCandia et al., "Dynamo: Amazon’s Highly Available Key-value Store," in <em>Proc. SOSP 2007</em>, pp. 205–220, 2007.</li><li>[5] J. Edwards, T. Petricek, and T. van der Storm, "Live &amp; Local Schema Change: Challenge Problems," arXiv:2309.11406, 2023.</li><li>[6] V. B. F. Gomes, M. Kleppmann, D. P. Mulligan, and A. R. Beresford, "Verifying Strong Eventual Consistency in Distributed Systems," <em>Proc. ACM Program. Lang.</em>, vol. 1, no. OOPSLA, Art. 109, 2017.</li><li>[7] M. Kleppmann and A. R. Beresford, "A Conflict-Free Replicated JSON Datatype," <em>IEEE Trans. Parallel Distrib. Syst.</em>, vol. 28, no. 10, pp. 2733–2746, 2017.</li><li>[8] M. Kleppmann, A. Wiggins, P. van Hardenberg, and M. McGranaghan, "Local-First Software: You Own Your Data, in Spite of the Cloud," in <em>Proc. Onward! 2019</em>, pp. 154–178, 2019.</li><li>[9] S. S. Kulkarni, M. Demirbas, D. Madappa, B. Avva, and M. Leone, "Logical Physical Clocks," in <em>Proc. OPODIS 2014</em>, LNCS 8878, pp. 17–32, 2014.</li><li>[10] N. V. Lewchenko, A. Radhakrishna, A. Gaonkar, and P. Černý, "Conflict-Aware Replicated Data Types," arXiv:1802.08733, 2018.</li><li>[11] M. Shapiro, N. Preguiça, C. Baquero, and M. Zawirski, "Conflict-Free Replicated Data Types," in <em>Proc. SSS 2011</em>, LNCS 6976, pp. 386–400, 2011.</li><li>[12] The <code>cr-sqlite</code> project, official repository, https://github.com/vlcn-io/cr-sqlite, accessed Oct. 2026.</li><li>[13] ElectricSQL project, official repository, https://github.com/electric-sql/electric, accessed Oct. 2026.</li><li>[14] C.-L. Ignat, V. Elvinger, and H. Ba, "Synql: A CRDT-Based Approach for Replicated Relational Databases with Integrity Constraints," in <em>Proc. DAIS 2024</em>, LNCS 14677, pp. 18–35, 2024.</li><li>[15] N. Faria and J. Pereira, "CRDV: Conflict-free Replicated Data Views," <em>Proc. ACM Manag. Data</em>, vol. 3, no. 1, Art. 25, 2025.</li><li>[16] J. Thomassen and W. Yu, "Eventually-Consistent Replicated Relations and Updatable Views," in <em>New Trends in Database and Information Systems</em>, pp. 187–196, 2023.</li><li>[17] P. M. S. Lopes, "Antidote SQL: SQL for Weakly Consistent Databases," Master's thesis, NOVA Univ. Lisbon, 2018.</li><li>[18] N. Schiefer, G. Litt, and D. Jackson, "Merge What You Can, Fork What You Can't: Managing Data Integrity in Local-First Software," in <em>Proc. PaPoC 2022</em>, pp. 24–32, 2022.</li><li>[19] M. Köhler, G. Zakhour, P. Weisenburger, and G. Salvaneschi, "Consistent Local-First Software: Enforcing Safety and Invariants for Local-First Applications," <em>IEEE Trans. Softw. Eng.</em>, vol. 51, no. 1, pp. 53–65, 2025.</li><li>[20] J. Haas, R. Mogk, E. Yanakieva, A. Bieniusa, and M. Mezini, "LoRe: A Programming Model for Verifiably Safe Local-First Software," <em>ACM Trans. Program. Lang. Syst.</em>, vol. 46, no. 1, Art. 2, 2024.</li><li>[21] D. Borrego, N. Preguiça, E. Gonzalez Boix, and C. Ferreira, "Ensuring Convergence and Invariants Without Coordination," in <em>Proc. ECOOP 2025</em>, LIPIcs 333, Art. 4, pp. 4:1–4:29, 2025.</li><li>[22] G. Litt, N. Schiefer, J. Schickling, and D. Jackson, "Riffle: Reactive Relational State for Local-First Applications," in <em>Proc. UIST 2023</em>, Art. 102, 2023.</li><li>[23] I. T. Tomter and W. Yu, "Augmenting SQLite for Local-First Software," in <em>Advances in Databases and Information Systems (ADBIS 2021 Short Papers)</em>, CCIS 1450, pp. 233-243, 2021. DOI: 10.1007/978-3-030-85082-1_22.</li><li>[24] J. Bauwens and E. Gonzalez Boix, "Nested Pure Operation-Based CRDTs," in <em>Proc. ECOOP 2023</em>, LIPIcs 263, Art. 2, pp. 2:1-2:26, 2023. DOI: 10.4230/LIPIcs.ECOOP.2023.2.</li><li>[25] Y. Zhang, H. Wei, and Y. Huang, "Remove-Win: A Design Framework for Conflict-Free Replicated Data Types," in <em>Proc. ICPADS 2021</em>, pp. 597-604, 2021. DOI: 10.1109/ICPADS53394.2021.00081.</li><li>[26] Y. Zhu and J. Ma, "Crust: A Modular Framework for Conflict-Free Replicated Data Types (CRDTs) Development, Validation, and Benchmarking," <em>IEEE Access</em>, vol. 13, pp. 83870-83882, 2025. DOI: 10.1109/ACCESS.2025.3568925.</li></ol></div>
+</body>
+</html>

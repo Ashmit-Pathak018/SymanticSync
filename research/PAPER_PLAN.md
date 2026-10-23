@@ -12,7 +12,7 @@ Distributed, local-first, and edge-native architectures increasingly employ SQLi
 
 We present **SemanticSync**, a domain-independent synchronization middleware that allows developers to declare column-level semantic merge policies (`SUM`, `AVG`, `APPEND`, `LWW`, `REJECT`, `MIN`, `MAX`) directly over standard SQLite schemas. SemanticSync statically validates policy-datatype compatibility, detects concurrent divergences via three-way differential inspection, and deterministically applies policy semantics during synchronization. 
 
-We evaluate SemanticSync against a generic LWW baseline across inventory, collaborative editing, and healthcare workloads. In initial empirical evaluations across representative conflict scenarios, SemanticSync achieves a 100% Semantic Correctness Rate ($SCR$) compared to 33.3% for the generic baseline, maintaining bitwise convergence and sub-millisecond resolution overhead. We outline an expanded conflict model incorporating tombstones, duplicate insert handling, and foreign key orphan quarantine.
+The current seeded stress evidence compares LWW and SemanticSync on generated SUM traces. It reports conflict-only SCR and benchmark-row value agreement separately; the latter compares only `bench_rows.value`, not bitwise full-database state. The regenerated 3×3 results are specific to the recorded seed, host, workload, and tested schedules and do not establish general convergence. Domain workload results and stress batch timings must be reported as distinct measurements.
 
 ---
 
@@ -25,7 +25,7 @@ We evaluate SemanticSync against a generic LWW baseline across inventory, collab
 
 ### 2. Background & Related Work
 - CRDT theory (Shapiro et al., 2011; Gomes et al., 2017).
-- Local-first systems (Kleppmann et al., 2019; Marr et al., 2023).
+- Local-first systems (Kleppmann et al., 2019; Edwards, Petricek, and van der Storm, 2023).
 - Relational replication: CR-SQLite, ElectricSQL, PowerSync.
 - Invariant-preserving replication (Balegas et al., 2015, 2018; Lewchenko et al., 2018).
 
@@ -48,7 +48,7 @@ We evaluate SemanticSync against a generic LWW baseline across inventory, collab
 
 ### 6. Empirical Evaluation
 - Experimental design and workload definitions.
-- Semantic Correctness Rate ($SCR$) and Convergence ($CR$) results.
+- Conflict-only Semantic Correctness Rate ($SCR$), benchmark-row value agreement (RVAR), and separately measured full-state convergence where available; do not call RVAR full-database convergence.
 - Latency and resolution overhead analysis.
 - Threats to validity and limitations.
 

@@ -1,0 +1,105 @@
+SemanticSync local test and artifact-validation environment snapshot
+Captured: 2026-10-20
+Repository HEAD: 5e98f43c972410f3403d06a27bd4bb4620a762a2
+Repository state: dirty and partly staged; see research/audit/REPOSITORY_BASELINE.md
+Operating system: Windows 11 (build string: Windows-11-10.0.26200-SP0)
+Architecture: AMD64
+Python: 3.14.3
+SQLite runtime: 3.50.4
+FastAPI: 0.143.0
+Starlette: 1.7.0
+Uvicorn: 0.54.0
+Pydantic: 2.13.4
+HTTPX: 0.28.1
+pytest: 9.1.1
+Node.js: 24.13.1
+npm: 11.8.0
+Vite: 8.3.4
+Vitest: 5.0.3
+React / React DOM: 19.3.0 / 19.3.0
+
+`py -3.14 -m pip freeze` at capture time:
+annotated-doc==0.0.5
+annotated-types==0.7.0
+anyio==4.14.1
+attrs==26.1.0
+beautifulsoup4==4.14.2
+blinker==1.9.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.4.4
+click==8.3.1
+colorama==0.4.6
+contourpy==1.3.3
+cycler==0.12.1
+distro==1.9.0
+docstring_parser==0.18.0
+fastapi==0.143.0
+Flask==3.1.2
+fonttools==4.60.1
+geopandas==1.1.4
+greenlet==3.4.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.11
+ijson==3.5.0
+iniconfig==2.3.1
+itsdangerous==2.2.0
+Jinja2==3.1.6
+jiter==0.16.0
+kiwisolver==1.4.9
+MarkupSafe==3.0.3
+matplotlib==3.10.7
+MouseInfo==0.1.3
+networkx==3.6.1
+numpy==2.3.4
+openai==2.44.0
+opentelemetry-api==1.45.1
+outcome==1.3.0.post0
+packaging==25.0
+pandas==3.0.5
+pillow==12.0.0
+playwright==1.58.0
+pluggy==1.6.0
+psutil==7.2.2
+PyAutoGUI==0.9.54
+pycparser==3.0
+Pygments==2.21.0
+pyee==13.0.1
+PyGetWindow==0.0.9
+PyMsgBox==2.0.1
+pyogrio==0.13.0
+pyparsing==3.2.5
+pyperclip==1.11.0
+pyproj==3.7.2
+PyRect==0.2.0
+PyScreeze==1.0.1
+PySocks==1.7.1
+pytest==9.1.1
+python-dateutil==2.9.0.post0
+python-multipart==0.0.32
+pytweening==1.2.0
+requests==2.32.5
+scipy==1.18.1
+selenium==4.50.0
+shapely==2.1.2
+six==1.17.0
+sniffio==1.3.1
+sortedcontainers==2.4.0
+soupsieve==2.8
+starlette==1.7.0
+tqdm==4.68.3
+trio==0.34.0
+trio-websocket==0.12.2
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2026.3
+urllib3==2.8.0
+uvicorn==0.54.0
+websocket-client==1.9.2
+Werkzeug==3.1.3
+wikipedia==1.4.0
+wsproto==1.3.2
+
+The package list is an environment snapshot, not a minimal project lockfile. It includes unrelated tools installed in this Python environment. Hardware storage type, physical memory, CPU model/usage, thermal state, and host load were not measured.

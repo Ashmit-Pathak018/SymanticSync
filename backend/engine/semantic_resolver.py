@@ -9,12 +9,12 @@ ResolutionResult from (base_value, value_a, value_b).
 Policies
 --------
   SUM    : resolved = base + (a - base) + (b - base) = a + b - base
-  AVG    : resolved = (a + b) / 2.0
-  APPEND : resolved = "<a_val>; <b_val>" (ordered deterministically)
-  LWW    : resolved = value with higher timestamp; tie-break by replica_id
+  AVG    : pairwise result = (a + b) / 2.0; no sample count is retained
+  APPEND : pairwise text merge, joining full values in replica-ID order
+  LWW    : value with higher timestamp when both exist; otherwise replica_id
   REJECT : status = 'flagged', resolved_value = None
-  MIN    : resolved = min(a, b)
-  MAX    : resolved = max(a, b)
+  MIN    : resolved = min(a, b) for validator-approved numeric columns
+  MAX    : resolved = max(a, b) for validator-approved numeric columns
 """
 
 from __future__ import annotations

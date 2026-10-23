@@ -53,6 +53,10 @@ def execute_query(body: QueryRequest) -> QueryResult:
     t0 = time.perf_counter()
     try:
         conn = connect_with_foreign_keys(db_path, check_same_thread=False)
+        if not body.replica_id and not body.allow_write:
+            # Enforce the QueryRequest contract in SQLite itself so CTEs or
+            # other statement forms cannot bypass a keyword-based write check.
+            conn.execute("PRAGMA query_only = ON")
         cursor = conn.cursor()
         cursor.execute(sql)
 

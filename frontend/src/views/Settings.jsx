@@ -1,41 +1,10 @@
-import React, { useState } from 'react';
-import {
-  BookOpen,
-  Sparkles,
-  ShieldCheck,
-  RefreshCw,
-  Cpu,
-  Layers,
-  Database,
-  CheckCircle2,
-  ExternalLink,
-} from 'lucide-react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Alert } from '../components/ui/Alert';
-import { api } from '../services/api';
 
 export function Settings() {
-  const { policyRegistry, refreshState } = useApp();
-  const [seeding, setSeeding] = useState(false);
-  const [seedMsg, setSeedMsg] = useState(null);
-
-  const handleSeed = async (workload) => {
-    setSeeding(true);
-    setSeedMsg(null);
-    try {
-      await api.seedWorkload(workload);
-      await refreshState();
-      setSeedMsg(`Successfully re-seeded '${workload}' demo data.`);
-      setTimeout(() => setSeedMsg(null), 4000);
-    } catch (err) {
-      alert(`Seeding failed: ${err.message}`);
-    } finally {
-      setSeeding(false);
-    }
-  };
+  const { policyRegistry } = useApp();
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -48,12 +17,6 @@ export function Settings() {
           </p>
         </div>
       </div>
-
-      {seedMsg && (
-        <Alert variant="success" title="Seeder Operation Complete">
-          {seedMsg}
-        </Alert>
-      )}
 
       {/* Policies Catalog */}
       <div className="space-y-4">
@@ -109,66 +72,23 @@ export function Settings() {
         </div>
       </div>
 
-      {/* Seeder & Demo Management */}
-      <Card title="Demo Workload Management" subtitle="Reset or re-populate benchmark datasets">
-        <p className="text-xs text-text-secondary mb-4">
-          Seeding resets the SQLite base databases, creates 3 edge replicas for each (<code>device_a</code>, <code>device_b</code>, <code>device_c</code>), assigns recommended policies, and injects controlled conflict scenarios for evaluation.
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-          <Button
-            variant="primary"
-            size="sm"
-            icon={Sparkles}
-            loading={seeding}
-            onClick={() => handleSeed('all')}
-          >
-            Re-Seed All 3 Workloads
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={seeding}
-            onClick={() => handleSeed('inventory')}
-          >
-            Seed Inventory Only
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={seeding}
-            onClick={() => handleSeed('notes')}
-          >
-            Seed Notes Only
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={seeding}
-            onClick={() => handleSeed('health')}
-          >
-            Seed Healthcare Only
-          </Button>
-        </div>
-      </Card>
-
       {/* Architectural Guidelines */}
-      <Card title="Architecture Principles & North Star">
+      <Card title="How to Read the Policy Catalog">
         <div className="space-y-3 text-xs text-text-secondary leading-relaxed">
           <p>
-            <strong className="text-text-primary">1. Keep SQL and SQLite:</strong> The underlying database engine is standard SQLite. Applications continue to run standard SQL transactions.
+            <strong className="text-text-primary">Storage:</strong> Workspaces and replicas are SQLite databases. Tracked mutations use the SemanticSync API; SQL Console statements bypass replication logging and quarantine workflows.
           </p>
           <p>
-            <strong className="text-text-primary">2. The Build Principle:</strong> <em>"CRDT handles convergence; the semantic middleware handles the meaning of a conflict."</em>
+            <strong className="text-text-primary">Policy scope:</strong> A policy describes how the engine handles supported conflicting column changes. Its behavior depends on operation history and the tested schedule.
           </p>
           <p>
-            <strong className="text-text-primary">3. Absolute Domain Independence:</strong> The core engine never hardcodes business assumptions. It operates purely on column datatypes and explicitly configured merge policies.
+            <strong className="text-text-primary">Bounds:</strong> BOUNDED_SUM keeps out-of-range candidates pending for review; it does not clamp or discard them.
           </p>
           <p>
-            <strong className="text-text-primary">4. Fail Fast with Explicit Validation:</strong> Schema and policy compatibility are validated before runtime execution. Incompatible configurations are caught with HTTP 422.
+            <strong className="text-text-primary">Review:</strong> REJECT and unsafe bounded operations may remain unresolved until a user reviews them. Check the Sync Hub and Conflicts view for held outcomes.
           </p>
           <p>
-            <strong className="text-text-primary">5. Determinism & Idempotency:</strong> Conflict resolution algorithms produce identical output on all replicas given identical inputs.
+            <strong className="text-text-primary">Evidence boundary:</strong> Deterministic selection does not establish causality, arbitrary-order convergence, or semantic correctness for every application.
           </p>
         </div>
       </Card>

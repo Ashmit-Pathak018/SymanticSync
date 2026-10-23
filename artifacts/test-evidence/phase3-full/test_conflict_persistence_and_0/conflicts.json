@@ -1,0 +1,25 @@
+{
+  "audit-test-uuid": {
+    "conflict_id": "audit-test-uuid",
+    "table": "items",
+    "row_id": 99,
+    "column": "*",
+    "conflict_type": "INSERT_INSERT",
+    "base_value": null,
+    "value_a": {
+      "id": 99,
+      "name": "Alpha"
+    },
+    "value_b": {
+      "id": 99,
+      "name": "Beta"
+    },
+    "replica_a_id": "node_a",
+    "replica_b_id": "node_b",
+    "replica_a_ts": 100.0,
+    "replica_b_ts": 200.0,
+    "status": "flagged",
+    "explanation": "INSERT collision test",
+    "detected_at": "2026-10-11T12:00:00Z"
+  }
+}

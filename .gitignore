@@ -3,10 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Pytest / Coverage
+# Pytest / Coverage / Temp Test Fixtures
 .pytest_cache/
 .coverage
 htmlcov/
+.pytest-*
+.semanticsync-research-data-*
+
+# External Tools and Scratch Runs
+tools/
+.codex-*
+*.zip
+*.tar.gz
 
 # Local databases and runtime state
 data/*

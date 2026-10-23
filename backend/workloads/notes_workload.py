@@ -107,9 +107,9 @@ def seed(base_path: str, replica_paths: dict[str, str]) -> dict[str, Any]:
             "INSERT OR REPLACE INTO notes (id, title, body, author, edit_count, tags) VALUES (?, ?, ?, ?, ?, ?)",
             _BASE_ROWS,
         )
-        if replica_id == "device_a":
+        if replica_id == "device_a" or replica_id.endswith("_device_a"):
             con_r.execute("UPDATE notes SET edit_count = 2, body = 'Initial meeting notes. Alice action items.' WHERE id = 1")
-        elif replica_id == "device_b":
+        elif replica_id == "device_b" or replica_id.endswith("_device_b"):
             con_r.execute("UPDATE notes SET edit_count = 3, body = 'Initial meeting notes. Bob risk register.' WHERE id = 1")
         con_r.commit()
         con_r.close()

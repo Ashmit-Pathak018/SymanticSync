@@ -142,7 +142,7 @@ Before concluding any implementation task, an agent **must verify**:
 - [ ] Incompatible policies are rejected before runtime (`test_validation.py` passes).
 - [ ] Deterministic resolution passes for `SUM`, `AVG`, `APPEND`, `LWW`, and `REJECT`.
 - [ ] Multi-replica sync cleanly converges divergent local database files.
-- [ ] Benchmark runner successfully measures **SCR (Semantic Correctness Rate)**, **Convergence Rate**, and **Resolution Overhead** against the generic baseline.
+- [ ] Benchmark runner reports **SCR (Semantic Correctness Rate)** using the workload's conflict denominator, identifies any narrow row-agreement metric as such, and separates measured batch-sync delta from resolver-only overhead. Do not claim full-database convergence unless complete database state is compared.
 - [ ] All API endpoints respond according to the specification.
 - [ ] The frontend compiles without lint/type errors and communicates with the backend.
 

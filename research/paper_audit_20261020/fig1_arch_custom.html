@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page {
+    size: 900pt 232pt;
+    margin: 0;
+}
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    width: 900pt;
+    height: 232pt;
+    overflow: hidden;
+}
+svg {
+    display: block;
+    width: 900pt;
+    height: 228pt;
+}
+.arch-head { font: bold 14px Arial, sans-serif; fill: #163d5c; }
+.arch-label { font: 12px Arial, sans-serif; fill: #263746; }
+</style>
+</head>
+<body>
+<svg class="architecture" role="img" aria-labelledby="arch-title arch-desc" viewBox="0 0 900 228" xmlns="http://www.w3.org/2000/svg"><title id="arch-title">SemanticSync system architecture</title><desc id="arch-desc">Three replica, engine, and sync-service groups with data flow from replicas through the engine to sync services.</desc><rect x="12" y="8" width="278" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="26" y="31" class="arch-head">Client replicas</text><rect x="24" y="42" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="58" class="arch-label">Application / client UI</text><rect x="24" y="69" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="85" class="arch-label">SQLite driver</text><rect x="24" y="96" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="112" class="arch-label">Local SQLite database</text><rect x="24" y="123" width="254" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="32" y="139" class="arch-label">Supported tracked writes</text><rect x="312" y="8" width="318" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="326" y="31" class="arch-head">SemanticSync engine</text><rect x="324" y="42" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="58" class="arch-label">Schema inspector + validator</text><rect x="324" y="69" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="85" class="arch-label">Three-way conflict detector</text><rect x="324" y="96" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="112" class="arch-label">Semantic policy resolver</text><rect x="324" y="123" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="139" class="arch-label">Foreign-key quarantine</text><rect x="324" y="150" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="166" class="arch-label">HLC metadata</text><rect x="324" y="177" width="294" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="332" y="193" class="arch-label">Checkpoint / compaction</text><rect x="648" y="8" width="240" height="210" rx="10" fill="#f5f8fa" stroke="#9aabba"/><text x="662" y="31" class="arch-head">Sync services</text><rect x="660" y="42" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="58" class="arch-label">Base ancestor store</text><rect x="660" y="69" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="85" class="arch-label">Checkpoint manifest store</text><rect x="660" y="96" width="216" height="23" rx="4" fill="#fff" stroke="#c6d1da"/><text x="668" y="112" class="arch-label">FastAPI sync reconciler</text><path d="M292 112 H307" stroke="#55758f" stroke-width="2" marker-end="url(#arrow)"/><path d="M630 112 H643" stroke="#55758f" stroke-width="2" marker-end="url(#arrow)"/><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#55758f"/></marker></defs></svg>
+</body>
+</html>

@@ -1,0 +1,207 @@
+{
+  "databases": {
+    "db_inventory": {
+      "name": "Inventory Workspace",
+      "path": "C:\\Users\\ASMIT\\SemanticSync\\data\\inventory\\inventory.db",
+      "description": "E-Commerce inventory stock, prices, descriptions, and SKU policies",
+      "id": "db_inventory",
+      "table_count": 1,
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "db_notes": {
+      "name": "Notes Workspace",
+      "path": "C:\\Users\\ASMIT\\SemanticSync\\data\\notes\\notes.db",
+      "description": "Collaborative document editor with body appends, edit counts, and author tracking",
+      "id": "db_notes",
+      "table_count": 1,
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "db_health": {
+      "name": "Health Workspace",
+      "path": "C:\\Users\\ASMIT\\SemanticSync\\data\\health\\health.db",
+      "description": "Healthcare illustrative workload: vital signs AVG, notes APPEND, blood type REJECT",
+      "id": "db_health",
+      "table_count": 1,
+      "created_at": "2026-10-12T17:57:57Z"
+    }
+  },
+  "replicas": {
+    "inventory_device_a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\inventory\\inventory_device_a.db",
+      "parent_db_id": "db_inventory",
+      "replica_id": "inventory_device_a",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "inventory_device_b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\inventory\\inventory_device_b.db",
+      "parent_db_id": "db_inventory",
+      "replica_id": "inventory_device_b",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "inventory_device_c": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\inventory\\inventory_device_c.db",
+      "parent_db_id": "db_inventory",
+      "replica_id": "inventory_device_c",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "notes_device_a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\notes\\notes_device_a.db",
+      "parent_db_id": "db_notes",
+      "replica_id": "notes_device_a",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "notes_device_b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\notes\\notes_device_b.db",
+      "parent_db_id": "db_notes",
+      "replica_id": "notes_device_b",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "notes_device_c": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\notes\\notes_device_c.db",
+      "parent_db_id": "db_notes",
+      "replica_id": "notes_device_c",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "health_device_a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\health\\health_device_a.db",
+      "parent_db_id": "db_health",
+      "replica_id": "health_device_a",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "health_device_b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\health\\health_device_b.db",
+      "parent_db_id": "db_health",
+      "replica_id": "health_device_b",
+      "created_at": "2026-10-12T17:57:57Z"
+    },
+    "health_device_c": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\data\\health\\health_device_c.db",
+      "parent_db_id": "db_health",
+      "replica_id": "health_device_c",
+      "created_at": "2026-10-12T17:57:57Z"
+    }
+  },
+  "policies": {
+    "db_inventory:products:quantity": "SUM",
+    "db_inventory:products:description": "APPEND",
+    "db_inventory:products:price": "AVG",
+    "db_inventory:products:name": "LWW",
+    "db_inventory:products:sku": "REJECT",
+    "db_inventory:products:critical_flag": "REJECT",
+    "db_notes:notes:body": "APPEND",
+    "db_notes:notes:edit_count": "SUM",
+    "db_notes:notes:author": "REJECT",
+    "db_notes:notes:title": "LWW",
+    "db_notes:notes:tags": "APPEND",
+    "db_health:patients:heart_rate": "AVG",
+    "db_health:patients:dosage_mg": "AVG",
+    "db_health:patients:clinical_notes": "APPEND",
+    "db_health:patients:blood_type": "REJECT",
+    "db_health:patients:name": "LWW"
+  },
+  "conflicts": {
+    "api-conflict-test-1": {
+      "status": "resolved",
+      "resolved_value": {
+        "conflict_id": "api-conflict-test-1",
+        "db_id": "test_db",
+        "table": "counters",
+        "row_id": 1,
+        "column": "amount",
+        "base_value": 50,
+        "value_a": 80,
+        "value_b": 60,
+        "replica_a_id": "a",
+        "replica_b_id": "b",
+        "replica_a_ts": 100.0,
+        "replica_b_ts": 200.0,
+        "status": "resolved",
+        "policy": "BOUNDED_SUM[min=0,max=100]",
+        "resolved_value": 90,
+        "resolution_mode": "auto",
+        "explanation": "BOUNDED_SUM base=50, signed deltas=(+30, +10), candidate=90, inclusive bounds=[0, 100]. Candidate is within bounds.",
+        "resolved_at": "2026-10-12T17:57:58Z"
+      },
+      "explanation": "",
+      "resolved_at": "2026-10-12T17:57:58Z"
+    },
+    "api-conflict-overflow": {
+      "status": "resolved",
+      "resolved_value": {
+        "conflict_id": "api-conflict-overflow",
+        "db_id": "test_db",
+        "table": "counters",
+        "row_id": 1,
+        "column": "amount",
+        "base_value": 50,
+        "value_a": 95,
+        "value_b": 90,
+        "replica_a_id": "a",
+        "replica_b_id": "b",
+        "replica_a_ts": 100.0,
+        "replica_b_ts": 200.0,
+        "status": "flagged",
+        "policy": "BOUNDED_SUM[min=0,max=100]",
+        "resolved_value": 135,
+        "resolution_mode": "auto",
+        "explanation": "BOUNDED_SUM base=50, signed deltas=(+45, +40), candidate=135, inclusive bounds=[0, 100]. Unsafe overflow; operation remains pending and no value was materialized.",
+        "resolved_at": "2026-10-12T17:57:58Z"
+      },
+      "explanation": "",
+      "resolved_at": "2026-10-12T17:57:58Z"
+    },
+    "api-conflict-insert": {
+      "conflict_id": "api-conflict-insert",
+      "db_id": "test_db",
+      "table": "counters",
+      "row_id": 2,
+      "column": "*",
+      "conflict_type": "INSERT_INSERT",
+      "replica_a_id": "a",
+      "replica_b_id": "b",
+      "status": "pending"
+    }
+  },
+  "metrics": {
+    "stress_latest": {
+      "config": {
+        "num_operations": 1000,
+        "conflict_density": 0.1,
+        "seed": 42,
+        "output_dir": null
+      },
+      "environment": {
+        "platform": "Windows-11-10.0.26200-SP0",
+        "python_version": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+        "pid": 28900
+      },
+      "num_operations": 1000,
+      "conflict_density": 0.1,
+      "total_conflicts_evaluated": 100,
+      "baseline_scr": 14.0,
+      "semantic_sync_scr": 100.0,
+      "baseline_convergence_rate": 100.0,
+      "semantic_sync_convergence_rate": 100.0,
+      "p50_latency_ms": 0.0013,
+      "p95_latency_ms": 0.0021,
+      "p99_latency_ms": 0.008,
+      "avg_latency_ms": 0.0015,
+      "total_sync_time_ms": 0.2,
+      "resolution_overhead_ms": 0.0015,
+      "change_log_entries": 2000,
+      "artifacts": {}
+    },
+    "inventory": {
+      "workload": "inventory",
+      "baseline_scr": 0.0,
+      "semantic_sync_scr": 100.0,
+      "baseline_convergence_rate": 100.0,
+      "semantic_sync_convergence_rate": 100.0,
+      "resolution_overhead_ms": 0.009,
+      "total_conflicts_evaluated": 3,
+      "correct_semantic_outcomes": 3
+    }
+  }
+}

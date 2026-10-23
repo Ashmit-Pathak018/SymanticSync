@@ -1,0 +1,10 @@
+trial,seed,workload_digest,outcome,system,execution_order,conflict_count,scr_pct,rvar_pct,write_sample_count,write_p95_ms,batch_sync_ms,receipt_rows,rejected_operations,failure_reason
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,application_sum,application_sum>engine_increment>engine_lww,50,100.0,100.0,1050,3.5434000001259847,8.618799999567273,0,0,
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,engine_increment,application_sum>engine_increment>engine_lww,50,100.0,100.0,1050,4.292399999940244,422.4862999999459,2100,0,
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,engine_lww,application_sum>engine_increment>engine_lww,50,0.0,100.0,0,,940.3370999998515,,100,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,engine_increment,engine_increment>engine_lww>application_sum,50,100.0,100.0,1050,4.246099999363651,476.3677999999345,2100,0,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,engine_lww,engine_increment>engine_lww>application_sum,50,0.0,100.0,0,,923.313600000256,,100,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,application_sum,engine_increment>engine_lww>application_sum,50,100.0,100.0,1050,3.4580999999889173,9.45529999989958,0,0,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,engine_lww,engine_lww>application_sum>engine_increment,50,0.0,100.0,0,,906.173200000012,,100,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,application_sum,engine_lww>application_sum>engine_increment,50,100.0,100.0,1050,3.438099999584665,8.737200000723533,0,0,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,engine_increment,engine_lww>application_sum>engine_increment,50,100.0,100.0,1050,3.9949000001797685,417.4764999997933,2100,0,

@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   RefreshCw,
   Zap,
   Play,
-  GitBranch,
   Layers,
-  ArrowRight,
   ShieldCheck,
-  CheckCircle2,
   AlertTriangle,
-  Clock,
-  Sparkles,
   Info,
-  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
@@ -22,17 +17,21 @@ import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
 
 export function SyncHub() {
+  const navigate = useNavigate();
   const { databases, selectedDbId, setSelectedDbId, syncStatus, refreshState, refreshCounter } = useApp();
 
   // Sync execution state
   const [selectedDb, setSelectedDb] = useState(selectedDbId || '');
   const [replicas, setReplicas] = useState([]);
+  const [replicaLoadError, setReplicaLoadError] = useState(null);
   const [replicaA, setReplicaA] = useState('');
   const [replicaB, setReplicaB] = useState('');
   const [tombstonePolicy, setTombstonePolicy] = useState('FLAG_FOR_REVIEW');
   const [runningSync, setRunningSync] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState(null);
+  const [remainingConflictCount, setRemainingConflictCount] = useState(null);
+  const [conflictRefreshError, setConflictRefreshError] = useState(null);
 
   // Checkpoint & Compaction state
   const [compacting, setCompacting] = useState(false);
@@ -59,6 +58,8 @@ export function SyncHub() {
       setSelectedDb(selectedDbId);
       setSyncResult(null);
       setSyncError(null);
+      setRemainingConflictCount(null);
+      setConflictRefreshError(null);
       setGenSuccess(null);
       setGenError(null);
     }
@@ -69,11 +70,13 @@ export function SyncHub() {
     async function loadReplicas() {
       if (!selectedDb) {
         setReplicas([]);
+        setReplicaLoadError(null);
         setReplicaA('');
         setReplicaB('');
         return;
       }
       const reqId = ++replicaReqRef.current;
+      setReplicaLoadError(null);
       try {
         const reps = await api.getReplicas(selectedDb);
         if (reqId !== replicaReqRef.current) return;
@@ -91,6 +94,10 @@ export function SyncHub() {
         }
       } catch (err) {
         if (reqId === replicaReqRef.current) {
+          setReplicas([]);
+          setReplicaA('');
+          setReplicaB('');
+          setReplicaLoadError(err.message || 'Could not load replicas.');
           console.error('Failed to load replicas for sync:', err);
         }
       }
@@ -107,10 +114,21 @@ export function SyncHub() {
     setRunningSync(true);
     setSyncResult(null);
     setSyncError(null);
+    setRemainingConflictCount(null);
+    setConflictRefreshError(null);
 
     try {
       const res = await api.runSync(selectedDb, replicaA, replicaB, tombstonePolicy);
       setSyncResult(res);
+      try {
+        // Sync returns held conflict IDs, while the review screen reads the
+        // durable conflict registry. Detect after sync so resolved cases do not
+        // leave stale pre-sync review records.
+        const remaining = await api.detectConflicts(selectedDb, replicaA, replicaB);
+        setRemainingConflictCount(Array.isArray(remaining) ? remaining.length : 0);
+      } catch (detectError) {
+        setConflictRefreshError(detectError.data?.detail || detectError.message);
+      }
       await refreshState();
     } catch (err) {
       setSyncError(err.data?.detail || err.message);
@@ -179,7 +197,7 @@ export function SyncHub() {
 
       let rowId = isNaN(Number(genRowId)) ? genRowId : Number(genRowId);
 
-      const res = await api.generateConflict({
+      await api.generateConflict({
         db_id: selectedDb,
         replica_a_id: replicaA,
         replica_b_id: replicaB,
@@ -190,7 +208,7 @@ export function SyncHub() {
         value_b: valB,
       });
 
-      setGenSuccess(`Injected divergence on ${genTable}.${genColumn} (Row #${rowId}): Replica A='${valA}' vs Replica B='${valB}'`);
+      setGenSuccess(`Tracked divergence recorded on ${genTable}.${genColumn} (row ${rowId}): A=${String(valA)}, B=${String(valB)}. The writes were issued sequentially before batch sync.`);
       await refreshState();
       setTimeout(() => setGenSuccess(null), 5000);
     } catch (err) {
@@ -205,9 +223,9 @@ export function SyncHub() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">CRDT Synchronization Hub</h1>
+          <h1 className="text-xl font-bold text-text-primary">Replica Sync Hub</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Execute 3-way synchronization across offline replicas using Hybrid Logical Clocks (HLC) and schema merge policies.
+            Compare two selected replicas with their common base. The demonstration generator records tracked writes sequentially, then this action runs batch synchronization.
           </p>
         </div>
 
@@ -242,7 +260,7 @@ export function SyncHub() {
               <RefreshCw className={`w-5 h-5 ${runningSync ? 'animate-spin' : ''}`} />
             </div>
             <span className="text-[10px] font-mono text-text-muted mt-1 uppercase font-semibold">
-              3-Way CRDT Exchange
+              Pairwise sync against the common base
             </span>
           </div>
 
@@ -366,7 +384,7 @@ export function SyncHub() {
               >
                 {replicaA === replicaB
                   ? 'Select Two Distinct Replicas'
-                  : 'Run Three-Way Semantic Sync'}
+                  : 'Run Pairwise Semantic Sync'}
               </Button>
             </form>
           </Card>
@@ -418,10 +436,21 @@ export function SyncHub() {
 
               <div className="text-xs text-text-muted mb-2 font-mono flex items-center justify-between">
                 <span>Execution Duration: {syncResult.duration_ms?.toFixed(2)} ms</span>
-                <span className={syncResult.skipped_tables?.length || syncResult.rejected_operations?.length ? 'text-warning font-semibold' : 'text-success font-semibold'}>
-                  {syncResult.rejected_operations?.length ? 'Completed with Held Operations' : syncResult.skipped_tables?.length ? 'Completed with Unsupported Tables' : 'Sync Completed'}
+                <span className={syncResult.skipped_tables?.length || syncResult.rejected_operations?.length || syncResult.flagged_for_review ? 'text-warning font-semibold' : 'text-success font-semibold'}>
+                  {syncResult.rejected_operations?.length || syncResult.flagged_for_review ? 'Completed with Items for Review' : syncResult.skipped_tables?.length ? 'Completed with Unsupported Tables' : 'Sync Completed'}
                 </span>
               </div>
+
+              {conflictRefreshError ? (
+                <Alert variant="warning" title="Conflict review list could not be refreshed" className="mb-4">
+                  Sync returned its result, but the separate conflict registry refresh failed: {conflictRefreshError}. Check the API, then refresh the Conflicts screen.
+                </Alert>
+              ) : remainingConflictCount !== null ? (
+                <Alert variant={remainingConflictCount ? 'warning' : 'success'} title={remainingConflictCount ? 'Remaining conflicts saved for review' : 'No conflicting values remain'} className="mb-4">
+                  {remainingConflictCount} conflict record(s) were detected after synchronization.{' '}
+                  {remainingConflictCount > 0 && <button type="button" className="underline font-semibold" onClick={() => navigate('/conflicts')}>Open Conflicts</button>}
+                </Alert>
+              ) : null}
 
               {/* Applied Changes List */}
               {syncResult.applied_changes && syncResult.applied_changes.length > 0 ? (
@@ -462,11 +491,12 @@ export function SyncHub() {
         {/* Right Col: Controlled Divergence Generator */}
         <div className="space-y-4">
           <Card
-            title="Controlled Conflict Generator"
-            subtitle="Simulate independent offline edits on two replicas without connectivity"
+            title="Controlled Tracked Divergence"
+            subtitle="Record one tracked edit on Replica A, then one on Replica B; synchronize afterward"
           >
+            {replicaLoadError && <Alert variant="danger" title="Replica list unavailable" className="mb-4">{replicaLoadError} Refresh or check the backend before generating edits.</Alert>}
             {genSuccess && (
-              <Alert variant="success" title="Divergent Edit Injected" className="mb-4">
+              <Alert variant="success" title="Tracked Edits Recorded" className="mb-4">
                 {genSuccess}
               </Alert>
             )}
@@ -558,9 +588,9 @@ export function SyncHub() {
                 className="w-full"
                 icon={Zap}
                 loading={generating}
-                disabled={!selectedDb || !replicaA || !replicaB}
+                disabled={!selectedDb || !replicaA || !replicaB || Boolean(replicaLoadError)}
               >
-                Inject Divergent Edits into Replicas
+                Record Two Tracked Edits
               </Button>
             </form>
           </Card>
@@ -572,12 +602,10 @@ export function SyncHub() {
               <span>How SemanticSync Evaluates Conflicts</span>
             </div>
             <p className="text-text-secondary leading-relaxed">
-              When replicas edit the same row offline, traditional CRDT engines select one value arbitrarily using Last-Write-Wins (LWW).
-              This guarantees <strong className="text-text-primary">convergence</strong> (both devices hold the same byte), but causes <strong className="text-danger">silent semantic data loss</strong> (e.g. 15 sold items are overwritten instead of combined!).
+              An <code className="font-mono font-bold">LWW</code> policy selects one candidate value. In the seeded additive example, choosing 115 or 120 would omit the other replica's tracked change. With the shared base of 100, the configured <code className="font-mono font-bold text-primary">SUM</code> policy can combine the two deltas to produce 135.
             </p>
             <p className="text-text-secondary leading-relaxed">
-              SemanticSync inspects the column's assigned policy:
-              under <code className="font-mono font-bold text-primary">SUM</code>, it calculates the additive delta from the common ancestor (<code className="font-mono">100 + 15 + 20 = 135</code>), achieving both convergence AND semantic correctness.
+              This is an illustration of the configured policy on this tracked scenario; it does not establish correctness or convergence for arbitrary histories or schedules.
             </p>
           </div>
         </div>
@@ -586,7 +614,7 @@ export function SyncHub() {
       {/* Operational Checkpoints & Causal Compaction Section */}
       <Card
         title="Operational Checkpoints & Causal Compaction"
-        subtitle="Manage durable epoch journals, track causal frontiers across enrolled replicas, and prune acknowledged operation logs safely."
+        subtitle="Advanced log-retention controls. Review checkpoint status before requesting compaction; this is not a demo reset, and recovery guarantees are limited to the documented tested scope."
       >
         <div className="space-y-4">
           {/* Status Row */}

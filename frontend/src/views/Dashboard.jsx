@@ -10,8 +10,6 @@ import {
   ShieldCheck,
   Cpu,
   ArrowRight,
-  Sparkles,
-  AlertTriangle,
   CheckCircle2,
   Plus,
 } from 'lucide-react';
@@ -19,15 +17,16 @@ import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Alert } from '../components/ui/Alert';
 import { api } from '../services/api';
 
 export function Dashboard() {
-  const { databases, syncStatus, refreshState, setSelectedDbId, refreshCounter } = useApp();
+  const { databases, syncStatus, setSelectedDbId, refreshCounter } = useApp();
   const navigate = useNavigate();
 
   const [conflicts, setConflicts] = useState([]);
+  const [conflictError, setConflictError] = useState(null);
   const [loadingConflicts, setLoadingConflicts] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     async function loadRecentConflicts() {
@@ -35,7 +34,10 @@ export function Dashboard() {
       try {
         const list = await api.getConflicts();
         setConflicts(Array.isArray(list) ? list.slice(0, 5) : []);
+        setConflictError(null);
       } catch (err) {
+        setConflicts([]);
+        setConflictError(err.message || 'Conflict activity is unavailable.');
         console.error('Failed to load conflicts:', err);
       } finally {
         setLoadingConflicts(false);
@@ -43,20 +45,6 @@ export function Dashboard() {
     }
     loadRecentConflicts();
   }, [refreshCounter]);
-
-  const handleSeed = async (workload = 'all') => {
-    setSeeding(true);
-    try {
-      await api.seedWorkload(workload);
-      await refreshState();
-      const list = await api.getConflicts();
-      setConflicts(Array.isArray(list) ? list.slice(0, 5) : []);
-    } catch (err) {
-      alert(`Seeding failed: ${err.message}`);
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -71,19 +59,16 @@ export function Dashboard() {
             SemanticSync Studio
           </h1>
           <p className="text-sm md:text-base text-gray-300 leading-relaxed">
-            Standard SQLite remains the storage engine. Standard SQL remains the query language.
-            While CRDTs guarantee mathematical convergence across local replicas, <span className="text-white font-semibold underline decoration-primary decoration-2 underline-offset-4">convergence does not guarantee semantic correctness</span>.
-            SemanticSync enforces schema-level attribute policies (<code className="text-primary-light font-mono text-xs font-bold">SUM</code>, <code className="text-primary-light font-mono text-xs font-bold">AVG</code>, <code className="text-primary-light font-mono text-xs font-bold">APPEND</code>, <code className="text-primary-light font-mono text-xs font-bold">LWW</code>, <code className="text-primary-light font-mono text-xs font-bold">REJECT</code>) so conflicting concurrent writes produce correct real-world states.
+            SemanticSync explores schema-level policies for resolving tracked changes in SQLite replicas. Convergence and application-level correctness are separate questions; results depend on the policy, operation history, and tested schedule.
           </p>
 
           <div className="flex flex-wrap items-center gap-3 mt-5">
             <Button
               variant="primary"
-              icon={Sparkles}
-              loading={seeding}
-              onClick={() => handleSeed('all')}
+              icon={Database}
+              onClick={() => navigate('/databases')}
             >
-              Seed Demo Workloads (Inventory, Notes, Health)
+              Browse Workspaces
             </Button>
             <Button
               variant="outline"
@@ -111,7 +96,7 @@ export function Dashboard() {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">SQLite Local Replicas</h4>
             <p className="text-xs text-text-secondary mt-1">
-              Devices edit independent offline SQLite replicas using normal SQL transactions.
+              Registered SQLite files can be inspected as workspaces with tracked replica operations available through the API workflows.
             </p>
           </div>
         </div>
@@ -123,7 +108,7 @@ export function Dashboard() {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Policy Validator</h4>
             <p className="text-xs text-text-secondary mt-1">
-              Type compatibility verification catches invalid configurations before runtime (HTTP 422).
+              Policy assignments are checked against the detected column type before they are saved.
             </p>
           </div>
         </div>
@@ -135,7 +120,7 @@ export function Dashboard() {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">Semantic Conflict Resolver</h4>
             <p className="text-xs text-text-secondary mt-1">
-              Domain-agnostic math: additive deltas (SUM), means (AVG), or manual flags (REJECT).
+              Policies include arithmetic merges, deterministic selection, and conflicts held for review; each has limits.
             </p>
           </div>
         </div>
@@ -147,7 +132,7 @@ export function Dashboard() {
           <div>
             <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider">CRDT Sync Engine</h4>
             <p className="text-xs text-text-secondary mt-1">
-              Hybrid Logical Clock (HLC) with 3-way diff tracks replica changes toward determinism.
+              The engine compares two selected replicas with their common base and reports applied, held, and rejected operations.
             </p>
           </div>
         </div>
@@ -177,7 +162,7 @@ export function Dashboard() {
             {syncStatus?.registered_replicas ?? 0}
           </div>
           <div className="text-[11px] text-text-muted mt-1">
-            Offline device nodes tracked
+            Replica databases registered
           </div>
         </Card>
 
@@ -195,7 +180,7 @@ export function Dashboard() {
             )}
           </div>
           <div className="text-[11px] text-text-muted mt-1">
-            {syncStatus?.resolved_conflicts ?? 0} resolved deterministically
+            {syncStatus?.resolved_conflicts ?? 0} resolved conflict records
           </div>
         </Card>
 
@@ -208,7 +193,7 @@ export function Dashboard() {
             {syncStatus?.status || 'Ready'}
           </div>
           <div className="text-[11px] text-text-muted mt-1 font-mono">
-            HLC Clocks Synchronized
+            Status reported by the sync API
           </div>
         </Card>
       </div>
@@ -237,16 +222,10 @@ export function Dashboard() {
               <Database className="w-10 h-10 text-text-muted mx-auto mb-2" />
               <h3 className="text-sm font-semibold text-text-primary">No Workspaces Registered</h3>
               <p className="text-xs text-text-secondary max-w-sm mx-auto mt-1 mb-4">
-                Seed default benchmark workloads or register an existing SQLite database file to begin.
+                The backend seeds workspaces automatically when started with a new empty demo data directory, or register an existing SQLite file.
               </p>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={Sparkles}
-                loading={seeding}
-                onClick={() => handleSeed('all')}
-              >
-                Seed Benchmark Workloads
+              <Button variant="primary" size="sm" onClick={() => navigate('/databases')}>
+                Open Workspaces
               </Button>
             </Card>
           ) : (
@@ -336,14 +315,16 @@ export function Dashboard() {
           </div>
 
           <Card className="p-0">
-            {loadingConflicts ? (
+            {conflictError ? (
+              <div className="p-4"><Alert variant="danger" title="Conflict activity unavailable">{conflictError}</Alert></div>
+            ) : loadingConflicts ? (
               <div className="p-6 text-center text-xs text-text-muted">Loading conflicts...</div>
             ) : conflicts.length === 0 ? (
               <div className="p-6 text-center">
                 <CheckCircle2 className="w-8 h-8 text-success mx-auto mb-2 opacity-80" />
-                <h4 className="text-xs font-semibold text-text-primary">Replicas Synchronized</h4>
+                <h4 className="text-xs font-semibold text-text-primary">No Conflicts Reported</h4>
                 <p className="text-[11px] text-text-secondary mt-1">
-                  No pending divergences. Use the Sync Hub or Seeder to inject controlled conflicts.
+                  No pending divergences. Use the Sync Hub to create controlled, tracked divergent edits.
                 </p>
                 <Button
                   size="sm"

@@ -172,17 +172,43 @@ class TestPolicyAlgebraicProperties:
 
 
     def test_min_max_associativity(self):
-        """MIN and MAX are true join-semilattices: associative, commutative, idempotent."""
+        """Resolver MIN/MAX are associative and idempotent for ordered numeric values."""
         vals = [15, 3, 99]
         # MIN
-        min_1 = min(min(vals[0], vals[1]), vals[2])
-        min_2 = min(vals[0], min(vals[1], vals[2]))
+        min_ab = SemanticResolver.resolve(
+            PolicyType.MIN, replica_a_value=vals[0], replica_b_value=vals[1]
+        ).resolved_value
+        min_bc = SemanticResolver.resolve(
+            PolicyType.MIN, replica_a_value=vals[1], replica_b_value=vals[2]
+        ).resolved_value
+        min_1 = SemanticResolver.resolve(
+            PolicyType.MIN, replica_a_value=min_ab, replica_b_value=vals[2]
+        ).resolved_value
+        min_2 = SemanticResolver.resolve(
+            PolicyType.MIN, replica_a_value=vals[0], replica_b_value=min_bc
+        ).resolved_value
         assert min_1 == min_2 == 3
+        assert SemanticResolver.resolve(
+            PolicyType.MIN, replica_a_value=vals[0], replica_b_value=vals[0]
+        ).resolved_value == vals[0]
 
         # MAX
-        max_1 = max(max(vals[0], vals[1]), vals[2])
-        max_2 = max(vals[0], max(vals[1], vals[2]))
+        max_ab = SemanticResolver.resolve(
+            PolicyType.MAX, replica_a_value=vals[0], replica_b_value=vals[1]
+        ).resolved_value
+        max_bc = SemanticResolver.resolve(
+            PolicyType.MAX, replica_a_value=vals[1], replica_b_value=vals[2]
+        ).resolved_value
+        max_1 = SemanticResolver.resolve(
+            PolicyType.MAX, replica_a_value=max_ab, replica_b_value=vals[2]
+        ).resolved_value
+        max_2 = SemanticResolver.resolve(
+            PolicyType.MAX, replica_a_value=vals[0], replica_b_value=max_bc
+        ).resolved_value
         assert max_1 == max_2 == 99
+        assert SemanticResolver.resolve(
+            PolicyType.MAX, replica_a_value=vals[0], replica_b_value=vals[0]
+        ).resolved_value == vals[0]
 
     def test_sum_non_idempotency_hazard(self):
         """Re-resolving SUM with unchanged base leads to duplicate delta addition (double-counting)."""

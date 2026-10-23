@@ -368,8 +368,15 @@ describe('Phase 7 Integration Tests', () => {
       // Default tab: Domain Workloads
       await waitFor(() => {
         expect(screen.getByText(/Research Benchmark Dashboard/i)).toBeDefined();
-        expect(screen.getByText(/Primary Empirical Metric/i)).toBeDefined();
+        expect(screen.getByText(/Domain runner is illustrative and unvalidated/i)).toBeDefined();
       });
+
+      // Legacy cached numbers must not be rendered as measured comparisons.
+      expect(screen.queryByText(/Primary Empirical Metric/i)).toBeNull();
+      expect(screen.queryByText('40.0%')).toBeNull();
+      expect(screen.queryByText('100.0%')).toBeNull();
+      expect(screen.queryByText('Measured')).toBeNull();
+      expect(screen.getAllByText(/excluded from empirical results/i).length).toBeGreaterThan(0);
 
       // Switch to Matrix Artifacts tab
       const artifactsTab = screen.getByRole('button', { name: /Matrix Artifacts/i });

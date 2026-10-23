@@ -1,0 +1,36 @@
+{
+  "databases": {},
+  "replicas": {
+    "a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_registry_replace_failure_0\\a.db"
+    },
+    "b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_registry_replace_failure_0\\b.db"
+    }
+  },
+  "policies": {},
+  "conflicts": {
+    "pk-conflict": {
+      "conflict_id": "pk-conflict",
+      "db_id": "db",
+      "table": "items",
+      "row_id": 1,
+      "column": "*",
+      "conflict_type": "INSERT_INSERT",
+      "status": "flagged",
+      "value_a": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "value_b": {
+        "id": 1,
+        "code": "shared",
+        "value": "B"
+      },
+      "replica_a_id": "a",
+      "replica_b_id": "b"
+    }
+  },
+  "metrics": {}
+}

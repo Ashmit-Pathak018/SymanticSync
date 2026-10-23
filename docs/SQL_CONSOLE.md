@@ -81,23 +81,17 @@ Response: {
 
 The SQL Console enforces these rules on the backend (`routes_query.py`):
 
-### Against Base Database (read-only by default)
-- `SELECT` statements → always allowed
-- `INSERT`, `UPDATE`, `DELETE` against base → blocked unless `allow_write: true` is explicitly passed
-- `DROP`, `CREATE TABLE`, `ALTER TABLE` → always blocked
+### Base Database
+- Read-only by default: SQLite `query_only` mode rejects mutation statements unless `allow_write: true` is supplied.
+- When opted in, a single SQLite statement is executed. The API rejects attempts to change `PRAGMA foreign_keys`.
 
-### Against Replicas (read-write allowed)
-- All DML operations allowed — replicas are copies
-- DDL operations (`DROP TABLE`, `ALTER TABLE`) → blocked
+### Replicas
+- Writes are allowed through the console. Each connection starts with SQLite foreign-key enforcement enabled.
 
-### SQL Safety Implementation
-```python
-sql_upper = sql.strip().upper()
-if not sql_upper.startswith("SELECT") and not allow_write:
-    raise HTTPException(status_code=400, detail="Write operations on base DB require allow_write=true")
-```
-
-> All SQL is executed using parameterized `sqlite3` connections, never string-formatted.
+### Replication and Quarantine Boundary
+- SQL-console writes are direct SQLite writes: they do not create operation IDs or change-log entries, do not invoke dependent-row quarantine, and bypass the shared process mutation lock.
+- Foreign-key constraints still reject invalid writes, and schema-declared `ON DELETE` / `ON UPDATE` actions still apply. A declared cascade may remove dependent rows without creating quarantine records.
+- Use tracked engine APIs for mutations that must be replayed or quarantined. External processes can bypass both the process lock and per-connection foreign-key setting.
 
 ---
 

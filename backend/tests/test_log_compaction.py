@@ -586,6 +586,35 @@ def test_recovery_preserves_tracked_update_written_after_manifest_commit(tmp_pat
     assert any(row[0] == tail_id for row in before_tail)
 
 
+def test_recovery_preserves_increment_written_after_manifest_commit(tmp_path, monkeypatch):
+    def add_numeric_column(base):
+        with sqlite3.connect(base) as conn:
+            conn.execute("ALTER TABLE items ADD COLUMN counter INTEGER NOT NULL DEFAULT 100")
+
+    routes, state, paths, checkpoint = _committed_checkpoint_fixture(
+        tmp_path, monkeypatch, configure_base=add_numeric_column,
+    )
+    operation_id = CRDTSyncEngine().apply_increment(
+        paths["a"], "a", "items", 1, "counter", 5,
+    )
+    with connect_with_foreign_keys(paths["a"]) as conn:
+        expected = conn.execute("SELECT counter FROM items WHERE id=1").fetchone()[0]
+
+    restarted = AppState()
+    restarted.load()
+    monkeypatch.setattr(routes, "app_state", restarted)
+    first = routes._resume_checkpoint(checkpoint)
+    retry = routes._resume_checkpoint(checkpoint)
+    assert first["checkpoint_id"] == retry["checkpoint_id"] == checkpoint["checkpoint_id"]
+    assert retry.get("replayed") is True
+    with connect_with_foreign_keys(paths["a"]) as conn:
+        assert conn.execute("SELECT counter FROM items WHERE id=1").fetchone()[0] == expected
+        assert conn.execute(
+            "SELECT COUNT(*) FROM _ss_change_log WHERE origin_id=? AND op_type='INCREMENT'",
+            (operation_id,),
+        ).fetchone()[0] == 1
+
+
 @pytest.mark.parametrize("mutation", ["insert", "delete"])
 def test_recovery_validates_tracked_insert_and_delete_tails(tmp_path, monkeypatch, mutation):
     routes, state, paths, checkpoint = _committed_checkpoint_fixture(tmp_path, monkeypatch)
@@ -736,6 +765,26 @@ def test_ack_conflict_preflight_changes_no_replica_vector_or_hot_log(tmp_path, m
 
     assert state.replica_acks == ack_before
     assert {replica_id: _hot_log_state(path) for replica_id, path in paths.items()} == logs_before
+
+
+def test_registry_membership_change_blocks_checkpoint_before_ack_or_pruning(tmp_path, monkeypatch):
+    from backend.engine.checkpoint_store import checkpoint_state
+
+    routes, state, paths, checkpoint = _committed_checkpoint_fixture(tmp_path, monkeypatch)
+    acks_before = {rid: dict(vector) for rid, vector in state.replica_acks["db"].items()}
+    logs_before = {rid: _hot_log_state(path) for rid, path in paths.items()}
+    state.register_replica(
+        "c", parent_db_id="db", db_path=str(tmp_path / "c.db"), incarnation_id="inc-c"
+    )
+
+    with pytest.raises(routes.CheckpointStoreBlocked, match="registry membership changed"):
+        routes._resume_checkpoint(checkpoint)
+
+    assert state.replica_acks["db"] == acks_before
+    assert {rid: _hot_log_state(path) for rid, path in paths.items()} == logs_before
+    assert checkpoint_state(
+        tmp_path / "checkpoint_store.sqlite", checkpoint["checkpoint_id"]
+    ) == "COMMITTED"
 
 
 def test_ack_reconciliation_partial_failure_restarts_and_retries_idempotently(tmp_path, monkeypatch):

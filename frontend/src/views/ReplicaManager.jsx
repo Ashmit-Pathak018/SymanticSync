@@ -7,9 +7,6 @@ import {
   RefreshCw,
   Clock,
   HardDrive,
-  Database,
-  ArrowRight,
-  CheckCircle2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
@@ -43,6 +40,7 @@ export function ReplicaManager() {
     if (!dbId) return;
     const reqId = ++requestIdRef.current;
     setLoading(true);
+    setError(null);
     setReplicas([]); // Immediately clear previous replicas to avoid stale data display
     try {
       const reps = await api.getReplicas(dbId);
@@ -50,6 +48,8 @@ export function ReplicaManager() {
       setReplicas(Array.isArray(reps) ? reps : []);
     } catch (err) {
       if (reqId === requestIdRef.current) {
+        setReplicas([]);
+        setError(`Could not load replicas: ${err.message}. Check the backend connection and retry.`);
         console.error('Failed to load replicas:', err);
       }
     } finally {
@@ -98,7 +98,7 @@ export function ReplicaManager() {
             SQLite Local Replicas Manager
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Local-first devices maintain independent SQLite copies that can diverge offline and synchronize later.
+            Each replica is an independent SQLite copy. Tracked edits can be recorded through the API and synchronized later.
           </p>
         </div>
 
@@ -117,6 +117,11 @@ export function ReplicaManager() {
       {/* Replicas Grid */}
       {loading ? (
         <div className="text-center py-16 text-text-muted text-xs">Loading replicas...</div>
+      ) : error ? (
+        <Alert variant="danger" title="Replica list unavailable">
+          {error}
+          <Button size="sm" variant="outline" className="mt-3" onClick={loadReplicas}>Retry</Button>
+        </Alert>
       ) : replicas.length === 0 ? (
         <Card className="text-center py-12">
           <GitBranch className="w-12 h-12 text-text-muted mx-auto mb-3" />

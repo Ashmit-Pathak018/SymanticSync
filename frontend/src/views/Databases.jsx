@@ -6,11 +6,7 @@ import {
   GitBranch,
   Layers,
   Terminal,
-  FolderOpen,
   Calendar,
-  AlertCircle,
-  CheckCircle2,
-  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card } from '../components/ui/Card';
@@ -41,21 +37,25 @@ export function Databases() {
 
   // Map of replicas per database
   const [replicasMap, setReplicasMap] = useState({});
+  const [replicaErrors, setReplicaErrors] = useState({});
   const [loadingReplicas, setLoadingReplicas] = useState(false);
 
   useEffect(() => {
     async function fetchAllReplicas() {
       setLoadingReplicas(true);
       const results = {};
+      const errors = {};
       for (const db of databases) {
         try {
           const reps = await api.getReplicas(db.id);
           results[db.id] = Array.isArray(reps) ? reps : [];
-        } catch {
+        } catch (err) {
           results[db.id] = [];
+          errors[db.id] = err.message || 'Replica list request failed.';
         }
       }
       setReplicasMap(results);
+      setReplicaErrors(errors);
       setLoadingReplicas(false);
     }
     if (databases.length > 0) {
@@ -115,7 +115,7 @@ export function Databases() {
         <div>
           <h1 className="text-xl font-bold text-text-primary">SQLite Workspaces & Replicas</h1>
           <p className="text-xs text-text-secondary mt-1">
-            Manage local relational databases and spawn isolated offline replicas for testing convergence.
+            Inspect registered databases, assign policies, and create independent replica files for tracked pairwise sync.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export function Databases() {
           <Database className="w-12 h-12 text-text-muted mx-auto mb-3" />
           <h3 className="text-sm font-semibold text-text-primary">No Workspaces Registered</h3>
           <p className="text-xs text-text-secondary max-w-md mx-auto mt-1 mb-5">
-            Register any existing SQLite database file (.db) or use the top bar to seed demo workloads.
+            Register an existing SQLite database file (.db). A fresh demo data directory is populated automatically when the backend starts.
           </p>
           <Button
             variant="primary"
@@ -241,7 +241,13 @@ export function Databases() {
                     </button>
                   </div>
 
-                  {reps.length === 0 ? (
+                  {loadingReplicas ? (
+                    <div className="text-xs text-text-muted bg-gray-50 rounded-lg p-3 text-center">Loading replica list…</div>
+                  ) : replicaErrors[db.id] ? (
+                    <Alert variant="danger" title="Replica list unavailable">
+                      {replicaErrors[db.id]} Refresh or check the backend before treating this workspace as empty.
+                    </Alert>
+                  ) : reps.length === 0 ? (
                     <div className="text-xs text-text-muted bg-gray-50 rounded-lg p-3 text-center">
                       No replicas forked yet. Fork a replica to simulate offline edits.
                     </div>

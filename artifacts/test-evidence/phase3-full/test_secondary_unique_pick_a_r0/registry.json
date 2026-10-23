@@ -1,0 +1,112 @@
+{
+  "databases": {},
+  "replicas": {
+    "a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_secondary_unique_pick_a_r0\\a.db"
+    },
+    "b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_secondary_unique_pick_a_r0\\b.db"
+    }
+  },
+  "policies": {},
+  "conflicts": {
+    "pk-conflict": {
+      "conflict_id": "unique-conflict",
+      "db_id": "db",
+      "table": "items",
+      "row_id": "1 vs 2",
+      "column": "*",
+      "conflict_type": "UNIQUE_COLLISION",
+      "status": "flagged",
+      "value_a": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "value_b": {
+        "id": 2,
+        "code": "shared",
+        "value": "B"
+      },
+      "replica_a_id": "a",
+      "replica_b_id": "b",
+      "resolution_operation": {
+        "operation_id": "560fafe9-e243-5b78-bd85-31642aed5814",
+        "source_id": "resolution:a:b",
+        "source_sequence": 1,
+        "replayed": false
+      }
+    },
+    "unique-conflict": {
+      "conflict_id": "unique-conflict",
+      "db_id": "db",
+      "table": "items",
+      "row_id": "1 vs 2",
+      "column": "*",
+      "conflict_type": "UNIQUE_COLLISION",
+      "status": "resolved",
+      "value_a": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "value_b": {
+        "id": 2,
+        "code": "shared",
+        "value": "B"
+      },
+      "replica_a_id": "a",
+      "replica_b_id": "b",
+      "resolution_operation": {
+        "operation_id": "560fafe9-e243-5b78-bd85-31642aed5814",
+        "source_id": "resolution:a:b",
+        "source_sequence": 1,
+        "replayed": false
+      },
+      "resolved_value": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "resolution_mode": "pick_a",
+      "explanation": "Manual resolution: picked Replica A value ({'id': 1, 'code': 'shared', 'value': 'A'})",
+      "resolved_at": "2026-10-12T17:58:00Z"
+    },
+    "custom-conflict": {
+      "conflict_id": "custom-conflict",
+      "db_id": "db",
+      "table": "items",
+      "row_id": "1 vs 2",
+      "column": "*",
+      "conflict_type": "UNIQUE_COLLISION",
+      "status": "resolved",
+      "value_a": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "value_b": {
+        "id": 2,
+        "code": "shared",
+        "value": "B"
+      },
+      "replica_a_id": "a",
+      "replica_b_id": "b",
+      "resolution_operation": {
+        "operation_id": "58ac0798-d3f4-5801-b905-236d5ed72522",
+        "source_id": "resolution:a:b",
+        "source_sequence": 2,
+        "replayed": false
+      },
+      "resolved_value": {
+        "id": 3,
+        "code": "replacement",
+        "value": "manual"
+      },
+      "resolution_mode": "custom",
+      "explanation": "Manual resolution: custom value applied ({'id': 3, 'code': 'replacement', 'value': 'manual'})",
+      "resolved_at": "2026-10-12T17:58:00Z"
+    }
+  },
+  "metrics": {}
+}

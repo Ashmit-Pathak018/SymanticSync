@@ -1,0 +1,11 @@
+metric,value
+num_operations,1000
+conflict_density,0.1
+total_conflicts_evaluated,100
+baseline_scr,14.0
+semantic_sync_scr,100.0
+p50_latency_ms,0.0013
+p95_latency_ms,0.0019
+p99_latency_ms,0.0065
+avg_latency_ms,0.0014
+total_sync_time_ms,0.2

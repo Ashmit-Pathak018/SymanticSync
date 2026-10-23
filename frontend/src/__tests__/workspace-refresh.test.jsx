@@ -297,4 +297,38 @@ describe('Workspace Switching and Global Refresh Tests', () => {
     // Visual feedback banner is rendered
     expect(screen.getByText(/workspace & system state refreshed/i)).toBeDefined();
   });
+
+  it('clears stale workspace state and shows an actionable message when the backend becomes unavailable', async () => {
+    function WorkspaceState() {
+      const { databases, error } = useApp();
+      return (
+        <>
+          <span data-testid="workspace-count">{databases.length}</span>
+          <span data-testid="refresh-error">{error || ''}</span>
+        </>
+      );
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AppProvider>
+          <TopBar />
+          <WorkspaceState />
+        </AppProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('workspace-count').textContent).toBe('2'));
+    api.checkHealth.mockRejectedValueOnce(new Error('connection refused'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /refresh application state/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-count').textContent).toBe('0');
+      expect(screen.getByTestId('refresh-error').textContent).toMatch(/start it with.*python main\.py/i);
+      expect(screen.getByText('API Offline')).toBeDefined();
+    });
+  });
 });

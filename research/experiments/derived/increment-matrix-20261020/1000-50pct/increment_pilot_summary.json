@@ -1,0 +1,518 @@
+{
+  "schema_version": "increment-run-summary-v1",
+  "status": "exploratory_not_confirmatory",
+  "generated_at_utc": "2026-10-20T08:39:48.898255+00:00",
+  "interpretation": "Descriptive statistics for trials in one validated run. The direct-SQL SUM path lacks equivalent system guarantees; paired deltas are not end-to-end overhead or evidence of a general performance advantage. LWW is an additive-oracle semantic contrast. No statistical significance or general convergence is claimed.",
+  "configuration": {
+    "num_operations": 1000,
+    "conflict_density": 0.5,
+    "policy_assignments": {
+      "engine_increment": "INCREMENT",
+      "application_sum": "direct additive operation merge",
+      "engine_lww": "absolute SET + LWW semantic contrast"
+    },
+    "workload_mode": "sequential tracked local writes followed by one batch synchronization"
+  },
+  "source_snapshot": {
+    "git_revision": "5e98f43c972410f3403d06a27bd4bb4620a762a2",
+    "worktree_dirty": true,
+    "relevant_file_sha256": {
+      "backend/engine/crdt_sync.py": "abb82f827efe5266de704e20ec88a80ecd4c32de45d8b2c4d4b12be1790075d6",
+      "backend/engine/conflict_detector.py": "8e6c0d7b02322e6e7748369c87d3cd699a52b37253dc5dff0069d57f3a7113fb",
+      "backend/engine/semantic_resolver.py": "233cf344c1ad540f1c635d4de464c7721802c8f653adf9114c83bba50ff21c6f",
+      "backend/engine/fk_quarantine.py": "929ff8a076a7a8ce35492952128196fa084814ecec5111f967446e671c3928dd",
+      "research/experiments/engine_evaluation.py": "419f0e62a15e2ebf03487a4d920d6afb40d8c5e19d9bd21c44c1b9fdb1a5feb2",
+      "research/experiments/increment_evaluation.py": "7df935de69aef58ecd5657d172fcfc916d996f795ac4698d12d9dab7f5528e2c"
+    }
+  },
+  "environment": {
+    "python": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+    "cpu_count": 24,
+    "sqlite_runtime_version": "3.50.4",
+    "journal_mode": "DELETE",
+    "foreign_keys": "enabled for tracked/application connections",
+    "storage_medium": "not measured",
+    "host_load": "not measured",
+    "physical_memory": "not measured"
+  },
+  "metric_definitions": {
+    "scr": "Both replicas' conflict-row values compared with independently calculated base + delta_a + delta_b.",
+    "rvar": "Agreement on ordered bench_rows.value vectors only; not database convergence.",
+    "vra": "Not measured.",
+    "timing": "Write samples are per local mutation; batch_sync_ms excludes setup and writes.",
+    "comparison": "Paired sync timing compares engine INCREMENT with direct application additive merge only; the baseline does not provide equivalent operation receipts, conflict handling, quarantine, or checkpoint guarantees, so the timings are descriptive mechanism costs and do not establish a general performance advantage. LWW is a semantic contrast and excluded from paired timing claims."
+  },
+  "source_json_files": [
+    "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json"
+  ],
+  "trial_count": 10,
+  "unique_seed_count": 10,
+  "unique_workload_digest_count": 10,
+  "execution_order_counts": {
+    "application_sum>engine_increment>engine_lww": 4,
+    "engine_increment>engine_lww>application_sum": 3,
+    "engine_lww>application_sum>engine_increment": 3
+  },
+  "systems": {
+    "application_sum": {
+      "batch_sync": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 8.085259999825212,
+        "sample_standard_deviation": 0.29765280008397266,
+        "median": 8.05789999958506,
+        "q1": 7.970050000039919,
+        "q3": 8.18567499936762,
+        "minimum": 7.557999999335152,
+        "maximum": 8.609499998783576
+      },
+      "per_trial_write_p95": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 3.11411999991833,
+        "sample_standard_deviation": 0.053654922458554716,
+        "median": 3.124950000710669,
+        "q1": 3.0763749987272604,
+        "q3": 3.155075000904617,
+        "minimum": 3.0293999989225995,
+        "maximum": 3.184299999702489
+      },
+      "scr_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    },
+    "engine_increment": {
+      "batch_sync": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 985.3132799997184,
+        "sample_standard_deviation": 14.97059738934243,
+        "median": 986.0722999992504,
+        "q1": 975.1636250007323,
+        "q3": 996.4172250001866,
+        "minimum": 958.6481999995158,
+        "maximum": 1004.061499999807
+      },
+      "per_trial_write_p95": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 3.743479999866395,
+        "sample_standard_deviation": 0.07701380482781621,
+        "median": 3.7839500000700355,
+        "q1": 3.684850000354345,
+        "q3": 3.8039249993744306,
+        "minimum": 3.628500000559143,
+        "maximum": 3.825099998721271
+      },
+      "scr_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    },
+    "engine_lww": {
+      "batch_sync": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 5040.687580000304,
+        "sample_standard_deviation": 88.13431183059195,
+        "median": 5063.828700000158,
+        "q1": 4966.04760000082,
+        "q3": 5113.147300000492,
+        "minimum": 4898.072399999364,
+        "maximum": 5140.351899999587
+      },
+      "per_trial_write_p95": {
+        "sample_count": 10,
+        "unit": "ms",
+        "mean": 3.7020199995822622,
+        "sample_standard_deviation": 0.06461671237089223,
+        "median": 3.698450000229059,
+        "q1": 3.6724999995385588,
+        "q3": 3.734074999101722,
+        "minimum": 3.6046000004716916,
+        "maximum": 3.8153999994392507
+      },
+      "scr_values_pct": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    }
+  },
+  "paired_sync_delta_engine_increment_minus_application_sum": {
+    "sample_count": 10,
+    "unit": "ms",
+    "mean": 977.2280199998931,
+    "sample_standard_deviation": 14.866665781016865,
+    "median": 978.0417499987379,
+    "q1": 966.954775000886,
+    "q3": 988.1161749990497,
+    "minimum": 951.0902000001806,
+    "maximum": 996.0210000008374
+  },
+  "trials": [
+    {
+      "trial_id": "increment-1000-0.5-20261300",
+      "seed": 20261300,
+      "workload_digest": "71132636072200b495a32747322159f6bf7cfe1347299d69f3a797f1b76c4eba",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.958000000144239,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 990.538000000015,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5051.208900000347,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 982.5799999998708
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261301",
+      "seed": 20261301,
+      "workload_digest": "4bbc433ce8ce245edbdc7a805a4944a0d828f18e16e73efc5edef93adfc43384",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.557999999335152,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 958.6481999995158,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 4933.705999999802,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 951.0902000001806
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261302",
+      "seed": 20261302,
+      "workload_digest": "b42b99e5479a17722accc8aa95359a7256167ccbf25735892d4045a6e7b1f745",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.457700001599733,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 996.9256000003952,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5000.366100000974,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 988.4678999987955
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261303",
+      "seed": 20261303,
+      "workload_digest": "fa23f6931810dc77472f699a709b387d860cda2278248fd6ecfecf66986823f3",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.213199998863274,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 1002.8759999986505,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 4898.072399999364,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 994.6627999997872
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261304",
+      "seed": 20261304,
+      "workload_digest": "3e37ac38ba49d62ed1cf92f5ea806d1d18b481a6ad099e1c14e971fe96542939",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.609499998783576,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 978.5990000000311,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5126.488100000643,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 969.9895000012475
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261305",
+      "seed": 20261305,
+      "workload_digest": "eb4357b30ba194bff5a2b835185268ff9c4264e2024abedaeb76270f6eda9367",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.103100000880659,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 981.6065999984858,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5113.481700000193,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 973.5034999976051
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261306",
+      "seed": 20261306,
+      "workload_digest": "dbf27d780cc4490107e5d13f8f71370a934f3ccf0d5fd019469de0d91348e0ff",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.040499998969608,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 1004.061499999807,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5140.351899999587,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 996.0210000008374
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261307",
+      "seed": 20261307,
+      "workload_digest": "c96f27ba8ced4037d1484ffaeb1210a11b55985bd94d4badeeef395ccada4dce",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.075300000200514,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 974.018500000966,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5076.4484999999695,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 965.9432000007655
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261308",
+      "seed": 20261308,
+      "workload_digest": "f2a8c7a35880306626ed4fa4574ab2cf5d1a13c178f6d7ced064057ca21d622a",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.00619999972696,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 970.9672999997565,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 5112.144100001387,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 962.9611000000295
+    },
+    {
+      "trial_id": "increment-1000-0.5-20261309",
+      "seed": 20261309,
+      "workload_digest": "a9fb9acd67d7535403226128d468b66d5253632b9e4aa873a2f5793724be3489",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-matrix-20261020\\1000-50pct\\increment_evaluation_1000_50pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.831099999748403,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 994.8920999995607,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 4954.608100000769,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 987.0609999998123
+    }
+  ]
+}

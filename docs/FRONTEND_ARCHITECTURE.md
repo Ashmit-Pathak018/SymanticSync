@@ -95,6 +95,7 @@ export const api = {
   executeQuery: (body)       => fetch(`${BASE}/query`, { method: 'POST', json: body }),
 
   // Benchmark
+  // Returns only illustrative_unvalidated status; domain output is not empirical telemetry.
   runBenchmark: (workload)   => fetch(`${BASE}/benchmark/run`, { method: 'POST', json: { workload } }),
   getMetrics: ()             => fetch(`${BASE}/metrics`).then(r => r.json()),
 

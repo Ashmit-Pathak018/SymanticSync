@@ -1,0 +1,50 @@
+{
+  "databases": {},
+  "replicas": {
+    "a": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_registry_write_failure_re0\\a.db"
+    },
+    "b": {
+      "db_path": "C:\\Users\\ASMIT\\SemanticSync\\.codex-phase3-full\\test_registry_write_failure_re0\\b.db"
+    }
+  },
+  "policies": {},
+  "conflicts": {
+    "pk-conflict": {
+      "conflict_id": "pk-conflict",
+      "db_id": "db",
+      "table": "items",
+      "row_id": 1,
+      "column": "*",
+      "conflict_type": "INSERT_INSERT",
+      "status": "resolved",
+      "value_a": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "value_b": {
+        "id": 1,
+        "code": "shared",
+        "value": "B"
+      },
+      "replica_a_id": "a",
+      "replica_b_id": "b",
+      "resolution_operation": {
+        "operation_id": "b6ff8460-6a69-5b51-ae80-0b4d1580235f",
+        "source_id": "resolution:a:b",
+        "source_sequence": null,
+        "replayed": true
+      },
+      "resolved_value": {
+        "id": 1,
+        "code": "shared",
+        "value": "A"
+      },
+      "resolution_mode": "pick_a",
+      "explanation": "Manual resolution: picked Replica A value ({'id': 1, 'code': 'shared', 'value': 'A'})",
+      "resolved_at": "2026-10-12T17:58:00Z"
+    }
+  },
+  "metrics": {}
+}

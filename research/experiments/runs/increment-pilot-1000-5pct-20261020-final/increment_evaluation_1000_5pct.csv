@@ -1,0 +1,10 @@
+trial,seed,workload_digest,outcome,system,execution_order,conflict_count,scr_pct,rvar_pct,write_sample_count,write_p95_ms,batch_sync_ms,receipt_rows,rejected_operations,failure_reason
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,application_sum,application_sum>engine_increment>engine_lww,50,100.0,100.0,1050,3.9022000000841217,9.7845000000234,0,0,
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,engine_increment,application_sum>engine_increment>engine_lww,50,100.0,100.0,1050,4.248399999596586,416.3831999994727,2100,0,
+1,20261023,185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c,SUCCESS,engine_lww,application_sum>engine_increment>engine_lww,50,0.0,100.0,1050,4.069199999321427,901.1823999999251,,100,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,engine_increment,engine_increment>engine_lww>application_sum,50,100.0,100.0,1050,4.085500000655884,450.1017000002321,2100,0,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,engine_lww,engine_increment>engine_lww>application_sum,50,0.0,100.0,1050,4.048900000270805,935.1839999999356,,100,
+2,20261024,03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54,SUCCESS,application_sum,engine_increment>engine_lww>application_sum,50,100.0,100.0,1050,3.4449999993739766,8.625200000096811,0,0,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,engine_lww,engine_lww>application_sum>engine_increment,50,0.0,100.0,1050,4.133200000069337,896.6677999997046,,100,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,application_sum,engine_lww>application_sum>engine_increment,50,100.0,100.0,1050,3.458199999840872,8.822200000395242,0,0,
+3,20261025,74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382,SUCCESS,engine_increment,engine_lww>application_sum>engine_increment,50,100.0,100.0,1050,4.036499999529042,433.4340000004886,2100,0,

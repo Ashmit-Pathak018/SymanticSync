@@ -18,7 +18,7 @@ An empirical audit was executed across the existing repository files, git histor
 | **Multi-Replica Convergence**| "Arbitrary multi-replica mesh convergence" | Current test suite tests only 2-replica pairwise convergence (`test_sync.py`). | ⚠️ **Clarified.** Pairwise model documented; $N \ge 3$ mesh testing scheduled for Phase 3. |
 | **Benchmark Scale** | Implied generalized benchmark performance | Benchmark suite currently measures 3 fixed scenarios across 3 workloads (9 total conflicts). | ⚠️ **Clarified.** Disclosed as Tier 1 unit verification. Tier 2 (1,000 conflicts) scheduled for Phase 4. |
 | **Foreign Key Safety** | "Automatic parent resurrection" | SQLite `PRAGMA foreign_keys` is not checked during sync write-back. | ⚠️ **Corrected.** Rejected automatic parent resurrection; scheduled orphan quarantine for Phase 5. |
-| **Literature References** | General citations | Unverified claims that no existing system addresses multi-table sync. | ⚠️ **Corrected.** Replaced with verified citations (Balegas, Gomes, Marr) in `LITERATURE_REVIEW.md`. |
+| **Literature References** | General citations | Unverified claims that no existing system addresses multi-table sync. | ⚠️ **Corrected.** Replaced with selected references (Balegas, Gomes, Edwards et al.) in `LITERATURE_REVIEW.md`; this was not a systematic literature review. |
 
 ---
 

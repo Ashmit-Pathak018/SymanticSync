@@ -1,0 +1,4 @@
+trial,seed,workload_digest,outcome,system,execution_order,conflict_count,scr_pct,rvar_pct,write_sample_count,write_p95_ms,batch_sync_ms,receipt_rows,rejected_operations,failure_reason
+1,20261031,01ea66a4743a8b50772db7ef5b2fe256768073611010123e7b6f8a0ba32e5b31,SUCCESS,application_sum,application_sum>engine_increment>engine_lww,2000,100.0,100.0,12000,3.1227000008584582,33.692299999529496,0,0,
+1,20261031,01ea66a4743a8b50772db7ef5b2fe256768073611010123e7b6f8a0ba32e5b31,SUCCESS,engine_increment,application_sum>engine_increment>engine_lww,2000,100.0,100.0,12000,4.038500000206113,47491.096599999764,24000,0,
+1,20261031,01ea66a4743a8b50772db7ef5b2fe256768073611010123e7b6f8a0ba32e5b31,SUCCESS,engine_lww,application_sum>engine_increment>engine_lww,2000,0.0,100.0,12000,3.975900000114052,62375.16570000025,,4000,

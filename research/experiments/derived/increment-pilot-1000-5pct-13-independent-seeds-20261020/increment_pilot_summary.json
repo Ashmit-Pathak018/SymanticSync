@@ -1,0 +1,627 @@
+{
+  "schema_version": "increment-pilot-pooled-summary-v1",
+  "status": "exploratory_not_confirmatory",
+  "generated_at_utc": "2026-10-20T08:11:41.953356+00:00",
+  "interpretation": "Descriptive pooling of independent seeds with identical recorded source hashes, environment, workload configuration, and metric definitions. The direct-SQL SUM path lacks equivalent system guarantees; paired deltas are not end-to-end overhead or evidence of a general performance advantage. LWW is an additive-oracle semantic contrast. No statistical significance or general convergence is claimed.",
+  "configuration": {
+    "num_operations": 1000,
+    "conflict_density": 0.05,
+    "policy_assignments": {
+      "engine_increment": "INCREMENT",
+      "application_sum": "direct additive operation merge",
+      "engine_lww": "absolute SET + LWW semantic contrast"
+    },
+    "workload_mode": "sequential tracked local writes followed by one batch synchronization"
+  },
+  "source_snapshot": {
+    "git_revision": "5e98f43c972410f3403d06a27bd4bb4620a762a2",
+    "worktree_dirty": true,
+    "relevant_file_sha256": {
+      "backend/engine/crdt_sync.py": "abb82f827efe5266de704e20ec88a80ecd4c32de45d8b2c4d4b12be1790075d6",
+      "backend/engine/conflict_detector.py": "8e6c0d7b02322e6e7748369c87d3cd699a52b37253dc5dff0069d57f3a7113fb",
+      "backend/engine/semantic_resolver.py": "233cf344c1ad540f1c635d4de464c7721802c8f653adf9114c83bba50ff21c6f",
+      "backend/engine/fk_quarantine.py": "929ff8a076a7a8ce35492952128196fa084814ecec5111f967446e671c3928dd",
+      "research/experiments/engine_evaluation.py": "419f0e62a15e2ebf03487a4d920d6afb40d8c5e19d9bd21c44c1b9fdb1a5feb2",
+      "research/experiments/increment_evaluation.py": "7df935de69aef58ecd5657d172fcfc916d996f795ac4698d12d9dab7f5528e2c"
+    }
+  },
+  "environment": {
+    "python": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+    "cpu_count": 24,
+    "sqlite_runtime_version": "3.50.4",
+    "journal_mode": "DELETE",
+    "foreign_keys": "enabled for tracked/application connections",
+    "storage_medium": "not measured",
+    "host_load": "not measured",
+    "physical_memory": "not measured"
+  },
+  "metric_definitions": {
+    "scr": "Both replicas' conflict-row values compared with independently calculated base + delta_a + delta_b.",
+    "rvar": "Agreement on ordered bench_rows.value vectors only; not database convergence.",
+    "vra": "Not measured.",
+    "timing": "Write samples are per local mutation; batch_sync_ms excludes setup and writes.",
+    "comparison": "Paired sync timing compares engine INCREMENT with direct application additive merge only; the baseline does not provide equivalent operation receipts, conflict handling, quarantine, or checkpoint guarantees, so the timings are descriptive mechanism costs and do not establish a general performance advantage. LWW is a semantic contrast and excluded from paired timing claims."
+  },
+  "source_json_files": [
+    "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-final\\increment_evaluation_1000_5pct.json",
+    "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json"
+  ],
+  "trial_count": 13,
+  "unique_seed_count": 13,
+  "unique_workload_digest_count": 13,
+  "execution_order_counts": {
+    "application_sum>engine_increment>engine_lww": 5,
+    "engine_increment>engine_lww>application_sum": 4,
+    "engine_lww>application_sum>engine_increment": 4
+  },
+  "systems": {
+    "application_sum": {
+      "batch_sync": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 8.21291538459963,
+        "sample_standard_deviation": 0.5875498956089446,
+        "median": 7.991799999217619,
+        "q1": 7.8883999995014165,
+        "q3": 8.34980000036012,
+        "minimum": 7.627599999977974,
+        "maximum": 9.7845000000234
+      },
+      "per_trial_write_p95": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 3.1988384616852272,
+        "sample_standard_deviation": 0.2569163498426647,
+        "median": 3.1180000005406328,
+        "q1": 3.05570000091393,
+        "q3": 3.1387999988510273,
+        "minimum": 2.987300000313553,
+        "maximum": 3.9022000000841217
+      },
+      "scr_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    },
+    "engine_increment": {
+      "batch_sync": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 424.01744615423155,
+        "sample_standard_deviation": 17.62446451269332,
+        "median": 417.6091000008455,
+        "q1": 416.09860000062326,
+        "q3": 433.4340000004886,
+        "minimum": 397.74190000025555,
+        "maximum": 458.51480000055744
+      },
+      "per_trial_write_p95": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 3.7957461537679102,
+        "sample_standard_deviation": 0.20565498863667198,
+        "median": 3.6966000006941613,
+        "q1": 3.665700000055949,
+        "q3": 3.882299999531824,
+        "minimum": 3.5779999998339918,
+        "maximum": 4.248399999596586
+      },
+      "scr_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    },
+    "engine_lww": {
+      "batch_sync": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 849.6244769231242,
+        "sample_standard_deviation": 39.1698566532995,
+        "median": 830.9100000005856,
+        "q1": 822.6434999996854,
+        "q3": 874.0982999988773,
+        "minimum": 813.1092000003264,
+        "maximum": 935.1839999999356
+      },
+      "per_trial_write_p95": {
+        "sample_count": 13,
+        "unit": "ms",
+        "mean": 3.7540615385296405,
+        "sample_standard_deviation": 0.19214942326609427,
+        "median": 3.659500000139815,
+        "q1": 3.6473000000114553,
+        "q3": 3.7187000016274396,
+        "minimum": 3.6000000000058208,
+        "maximum": 4.133200000069337
+      },
+      "scr_values_pct": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rvar_values_pct": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ]
+    }
+  },
+  "paired_sync_delta_engine_increment_minus_application_sum": {
+    "sample_count": 13,
+    "unit": "ms",
+    "mean": 415.8045307696319,
+    "sample_standard_deviation": 17.62531822107563,
+    "median": 409.5846000000165,
+    "q1": 406.5986999994493,
+    "q3": 424.61180000009335,
+    "minimum": 389.84030000028724,
+    "maximum": 450.6537000015669
+  },
+  "trials": [
+    {
+      "trial_id": "increment-1000-0.05-20261023",
+      "seed": 20261023,
+      "workload_digest": "185dc80ccf89b63987e7b4c219d0aecb3bbb17fef474ff00b4e32332d8e26d6c",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-final\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 9.7845000000234,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 416.3831999994727,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 901.1823999999251,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 406.5986999994493
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261024",
+      "seed": 20261024,
+      "workload_digest": "03d836399d2ebaf6e2567e7d63d5c7b62ed7aa51175584843eb9dfdfe1b7ae54",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-final\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.625200000096811,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 450.1017000002321,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 935.1839999999356,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 441.4765000001353
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261025",
+      "seed": 20261025,
+      "workload_digest": "74773d5b101fd6661724ebf1c5751b5fc99d80b2d2cec4581f85c190d0112382",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-final\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.822200000395242,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 433.4340000004886,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 896.6677999997046,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 424.61180000009335
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261100",
+      "seed": 20261100,
+      "workload_digest": "dc3f3ee4c40f632bec6dae61c025d8bc7bbef8077f0424000e6251c47c1ca719",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.649900000615162,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 416.09860000062326,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 874.0982999988773,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 408.4487000000081
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261101",
+      "seed": 20261101,
+      "workload_digest": "3b820e81965e8f15bf5d0a34edd9a8f466de8d3bc0fdeaad8ca95765d5fe0c7e",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.627599999977974,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 444.0245000005234,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 813.1092000003264,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 436.39690000054543
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261102",
+      "seed": 20261102,
+      "workload_digest": "b5b3eaacdf89d32f21c1c419f94007120bbe12d8fc1a3d38a4daf060552d6541",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.979900001373608,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 412.80730000107724,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 822.6434999996854,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 404.82739999970363
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261103",
+      "seed": 20261103,
+      "workload_digest": "21c6cda5e6818000c404446654ad531a24ccd8ca9d5d8c2270e561eb84fbaed5",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.991799999217619,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 406.17270000075223,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 828.4577999984322,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 398.1809000015346
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261104",
+      "seed": 20261104,
+      "workload_digest": "c88edf4269f22cc99fd5e97d091c39756f8856f5d920cb28cda84a42b0deca39",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.058699999310193,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 418.73860000123386,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 830.9100000005856,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 410.67990000192367
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261105",
+      "seed": 20261105,
+      "workload_digest": "f9f129ffa3027c1acb39ab9b6e37f92f51e89d37854a501574c2c6518c54e751",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.8883999995014165,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 417.4729999995179,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 841.8622000008327,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 409.5846000000165
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261106",
+      "seed": 20261106,
+      "workload_digest": "e5fd36576e9a32555fb9fbac88e4cc64036d7b86517c1a5c23908156c6f6d34e",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.901599999968312,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 397.74190000025555,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 818.7314000006154,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 389.84030000028724
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261107",
+      "seed": 20261107,
+      "workload_digest": "3057f21b44a08ca059bbe3dbedae0c1e16833c131c73bcbfecae12996874303d",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_increment",
+        "engine_lww",
+        "application_sum"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.34980000036012,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 417.6091000008455,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 823.8054000012198,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 409.2593000004854
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261108",
+      "seed": 20261108,
+      "workload_digest": "91d6dcdb586227f35286dfe011b13411c998896e35d6350c12df9fb6a393aab8",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "engine_lww",
+        "application_sum",
+        "engine_increment"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 8.227199999964796,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 423.12739999943005,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 818.0939000012586,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 414.90019999946526
+    },
+    {
+      "trial_id": "increment-1000-0.05-20261109",
+      "seed": 20261109,
+      "workload_digest": "aa4dd31f5440832d0880cf4738db257c0db843ddb3387e77b163ae6d1bff08f4",
+      "outcome": "SUCCESS",
+      "execution_order": [
+        "application_sum",
+        "engine_increment",
+        "engine_lww"
+      ],
+      "source_json": "research\\experiments\\runs\\increment-pilot-1000-5pct-20261020-10-seeds\\increment_evaluation_1000_5pct.json",
+      "systems": {
+        "application_sum": {
+          "batch_sync_ms": 7.8610999989905395,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_increment": {
+          "batch_sync_ms": 458.51480000055744,
+          "scr_pct": 100.0,
+          "rvar_pct": 100.0
+        },
+        "engine_lww": {
+          "batch_sync_ms": 840.3722999992169,
+          "scr_pct": 0.0,
+          "rvar_pct": 100.0
+        }
+      },
+      "paired_delta_ms": 450.6537000015669
+    }
+  ]
+}

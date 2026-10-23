@@ -165,5 +165,5 @@ Modes: `auto` (use policy), `pick_a`, `pick_b`, `custom`.
 6. GET  /api/v1/conflicts     → Inspect resolved + flagged
 
 7. POST /api/v1/benchmark/run { "workload": "inventory" }
-   → Compare Baseline SCR vs SemanticSync SCR
+   → Return illustrative/unvalidated domain-runner status; no comparison metrics
 ```

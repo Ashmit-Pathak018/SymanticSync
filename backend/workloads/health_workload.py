@@ -192,9 +192,9 @@ def seed(base_path: str, replica_paths: dict[str, str]) -> dict[str, Any]:
             "VALUES (?, ?, ?, ?, ?, ?);",
             rows,
         )
-        if replica_id == "device_a":
+        if replica_id == "device_a" or replica_id.endswith("_device_a"):
             con_r.execute("UPDATE patients SET heart_rate = 75, clinical_notes = 'Initial assessment normal. Clinician A: BP 120/80.' WHERE id = 1")
-        elif replica_id == "device_b":
+        elif replica_id == "device_b" or replica_id.endswith("_device_b"):
             con_r.execute("UPDATE patients SET heart_rate = 69, clinical_notes = 'Initial assessment normal. Clinician B: SpO2 98%.', blood_type = 'B+' WHERE id = 1")
         con_r.commit()
         con_r.close()
