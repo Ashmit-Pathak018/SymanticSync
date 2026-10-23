@@ -14,6 +14,7 @@ For reviewing and demonstrating SemanticSync during faculty presentation and tec
 
 | Document | Purpose | Location |
 | :--- | :--- | :--- |
+| **Explanation Package** | Complete defense & technical explanation suite folder | [`explanation/`](explanation/README.md) |
 | **Presentation Cheatsheet** | 1-page quick reference (pitch, 5 contributions, 10 faculty Q&As, commands) | [`docs/PRESENTATION_CHEATSHEET.md`](docs/PRESENTATION_CHEATSHEET.md) |
 | **Live Demonstration Guide** | 8–12 minute minute-by-minute script, pre-demo checklist, 3 live demos, fallbacks | [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md) |
 | **Technical Explanation** | 20-section deep dive (architecture, data flow, 8 policies, HLC, FK quarantine, 26 Q&As) | [`docs/TECHNICAL_EXPLANATION.md`](docs/TECHNICAL_EXPLANATION.md) |
